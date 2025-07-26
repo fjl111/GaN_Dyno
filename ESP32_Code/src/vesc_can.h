@@ -11,81 +11,93 @@
 
 #include <stdint.h>
 
-// Application-level VESC data structure
+// VESC CAN Packet IDs (from VESC firmware datatype.h)
+typedef enum {
+    CAN_PACKET_SET_DUTY = 0,
+    CAN_PACKET_SET_CURRENT,
+    CAN_PACKET_SET_CURRENT_BRAKE,
+    CAN_PACKET_SET_RPM,
+    CAN_PACKET_SET_POS,
+    CAN_PACKET_FILL_RX_BUFFER,
+    CAN_PACKET_FILL_RX_BUFFER_LONG,
+    CAN_PACKET_PROCESS_RX_BUFFER,
+    CAN_PACKET_PROCESS_SHORT_BUFFER,
+    CAN_PACKET_STATUS,                    // 9
+    CAN_PACKET_SET_CURRENT_REL,
+    CAN_PACKET_SET_CURRENT_BRAKE_REL,
+    CAN_PACKET_SET_CURRENT_HANDBRAKE,
+    CAN_PACKET_SET_CURRENT_HANDBRAKE_REL,
+    CAN_PACKET_STATUS_1,                  // 14
+    CAN_PACKET_STATUS_2,                  // 15
+    CAN_PACKET_STATUS_3,                  // 16
+    CAN_PACKET_STATUS_4,                  // 17
+    CAN_PACKET_STATUS_5,                  // 18
+    CAN_PACKET_PING,
+    CAN_PACKET_PONG,
+    CAN_PACKET_DETECT_APPLY_ALL_FOC,
+    CAN_PACKET_DETECT_APPLY_ALL_FOC_RES,
+    CAN_PACKET_CONF_CURRENT_LIMITS,
+    CAN_PACKET_CONF_STORE_CURRENT_LIMITS,
+    CAN_PACKET_CONF_CURRENT_LIMITS_IN,
+    CAN_PACKET_CONF_STORE_CURRENT_LIMITS_IN,
+    CAN_PACKET_CONF_FOC_ERPMS,
+    CAN_PACKET_CONF_STORE_FOC_ERPMS,
+    CAN_PACKET_STATUS_6,                  // 29
+    CAN_PACKET_GET_VALUES_SELECTIVE,
+    CAN_PACKET_GET_VALUES_SETUP_SELECTIVE,
+    CAN_PACKET_EXT_FRAME
+} CAN_PACKET_ID;
+
+// Enhanced VESC data structure with all available telemetry
 struct VESCData {
-    int32_t rpm;
-    float current;
-    float voltage;
-    float temp_fet;
-    float temp_motor;
-    float duty_cycle;
-    uint32_t data_age;
-    bool connected;
+    // STATUS_1: Basic motor telemetry
+    int32_t rpm;                    // Motor RPM (electrical RPM / pole pairs)
+    float current;                  // Motor current in Amps
+    float duty_cycle;               // PWM duty cycle (-1.0 to 1.0)
+    
+    // STATUS_2: Energy consumption
+    float amp_hours;                // Total amp hours consumed
+    float amp_hours_charged;        // Total amp hours charged (regenerative braking)
+    
+    // STATUS_3: Energy consumption (Watt hours)
+    float watt_hours;               // Total watt hours consumed  
+    float watt_hours_charged;       // Total watt hours charged
+    
+    // STATUS_4: Temperatures and input current
+    float temp_fet;                 // FET temperature in Celsius
+    float temp_motor;               // Motor temperature in Celsius
+    float current_in;               // Input current in Amps
+    float pid_pos_now;              // Current PID position
+    
+    // STATUS_5: Position and input voltage
+    int32_t tacho_value;            // Absolute encoder position (tacho)
+    float voltage_in;               // Input voltage
+    
+    // STATUS_6: ADC values (implementation specific)
+    float adc1;                     // ADC channel 1
+    float adc2;                     // ADC channel 2  
+    float adc3;                     // ADC channel 3
+    float ppm;                      // PPM input value
+    
+    // Legacy/computed values for backward compatibility
+    float voltage;                  // Same as voltage_in
+    
+    // Connection and timing info
+    bool connected;                 // Is VESC connected and responding
+    uint32_t data_age;              // Time since last update (ms)
+    uint32_t last_update;           // Timestamp of last update
 };
 
-// VESC CAN packet IDs (add to base CAN ID)
-#define CAN_PACKET_SET_DUTY                         0x00
-#define CAN_PACKET_SET_CURRENT                      0x01
-#define CAN_PACKET_SET_CURRENT_BRAKE                0x02
-#define CAN_PACKET_SET_RPM                          0x03
-#define CAN_PACKET_SET_POS                          0x04
-#define CAN_PACKET_FILL_RX_BUFFER                   0x05
-#define CAN_PACKET_FILL_RX_BUFFER_LONG              0x06
-#define CAN_PACKET_PROCESS_RX_BUFFER                0x07
-#define CAN_PACKET_PROCESS_SHORT_BUFFER             0x08
-#define CAN_PACKET_STATUS                           0x09
-#define CAN_PACKET_SET_CURRENT_REL                  0x0A
-#define CAN_PACKET_SET_CURRENT_BRAKE_REL            0x0B
-#define CAN_PACKET_SET_CURRENT_HANDBRAKE            0x0C
-#define CAN_PACKET_SET_CURRENT_HANDBRAKE_REL        0x0D
-#define CAN_PACKET_STATUS_2                         0x0E
-#define CAN_PACKET_STATUS_3                         0x0F
-#define CAN_PACKET_STATUS_4                         0x10
-#define CAN_PACKET_PING                             0x11
-#define CAN_PACKET_PONG                             0x12
-#define CAN_PACKET_DETECT_APPLY_ALL_FOC             0x13
-#define CAN_PACKET_DETECT_APPLY_ALL_FOC_RES         0x14
-#define CAN_PACKET_CONF_CURRENT_LIMITS              0x15
-#define CAN_PACKET_CONF_STORE_CURRENT_LIMITS        0x16
-#define CAN_PACKET_CONF_CURRENT_LIMITS_IN           0x17
-#define CAN_PACKET_CONF_STORE_CURRENT_LIMITS_IN     0x18
-#define CAN_PACKET_CONF_FOC_ERPMS                   0x19
-#define CAN_PACKET_CONF_STORE_FOC_ERPMS             0x1A
-#define CAN_PACKET_STATUS_5                         0x1B
-
-// VESC status packet structure (STATUS packet 0x09)
-typedef struct {
-    int32_t rpm;             // Mechanical RPM
-    float current;           // Motor current in Amps
-    float duty_cycle;        // Duty cycle (-1.0 to 1.0)
-} __attribute__((packed)) vesc_status_1_t;
-
-// VESC status packet 2 structure (STATUS_2 packet 0x0E)
-typedef struct {
-    float amp_hours;         // Amp hours used
-    float amp_hours_charged; // Amp hours charged
-} __attribute__((packed)) vesc_status_2_t;
-
-// VESC status packet 3 structure (STATUS_3 packet 0x0F)
-typedef struct {
-    float watt_hours;        // Watt hours used
-    float watt_hours_charged; // Watt hours charged
-} __attribute__((packed)) vesc_status_3_t;
-
-// VESC status packet 4 structure (STATUS_4 packet 0x10)
-typedef struct {
-    float temp_fet;          // FET temperature in °C
-    float temp_motor;        // Motor temperature in °C
-    float current_in;        // Input current in Amps
-    float pid_pos_now;       // Current PID position
-} __attribute__((packed)) vesc_status_4_t;
-
-// VESC status packet 5 structure (STATUS_5 packet 0x1B)
-typedef struct {
-    float v_in;              // Input voltage
-    int32_t tacho_value;     // Absolute tachometer value
-    int32_t tacho_abs_value; // Absolute tachometer value (absolute)
-} __attribute__((packed)) vesc_status_5_t;
+// Scaling factors used by VESC (from VESC firmware)
+#define VESC_SCALE_CURRENT      10.0f       // Current scaling (0.1A resolution)
+#define VESC_SCALE_VOLTAGE      10.0f       // Voltage scaling (0.1V resolution)  
+#define VESC_SCALE_TEMPERATURE  10.0f       // Temperature scaling (0.1°C resolution)
+#define VESC_SCALE_DUTY         1000.0f     // Duty cycle scaling (0.1% resolution)
+#define VESC_SCALE_AH           10000.0f    // Amp hour scaling (0.0001 Ah resolution)
+#define VESC_SCALE_WH           10000.0f    // Watt hour scaling (0.0001 Wh resolution)
+#define VESC_SCALE_PID_POS      50.0f       // PID position scaling
+#define VESC_SCALE_ADC          1000.0f     // ADC scaling
+#define VESC_SCALE_PPM          1000.0f     // PPM scaling
 
 // Helper functions for byte order conversion
 static inline int16_t buffer_get_int16(const uint8_t *buffer, int32_t *index) {
@@ -140,6 +152,14 @@ static inline void buffer_append_uint32(uint8_t* buffer, uint32_t number, int32_
     buffer[(*index)++] = number >> 16;
     buffer[(*index)++] = number >> 8;
     buffer[(*index)++] = number;
+}
+
+static inline float buffer_get_float16(const uint8_t* buffer, float scale, int32_t* index) {
+    return (float)buffer_get_int16(buffer, index) / scale;
+}
+
+static inline float buffer_get_float32(const uint8_t* buffer, float scale, int32_t* index) {
+    return (float)buffer_get_int32(buffer, index) / scale;
 }
 
 #endif // VESC_CAN_H

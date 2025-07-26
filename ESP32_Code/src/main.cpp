@@ -66,8 +66,9 @@ struct DynoData {
 };
 
 // Global variables
-// CAN controller variable
-MCP2515 can_controller(CAN_CS_PIN);
+// CAN controller variable. 
+// Set to null so that the object can be defined after SPI
+MCP2515* can_controller = nullptr;
 
 // Variables to hold data received from the motor controllers
 VESCData drive_data = {0};
@@ -85,8 +86,6 @@ unsigned long last_heartbeat = 0;
 const unsigned long STATUS_REQUEST_INTERVAL = 100;
 // Send data to the computer every 50ms
 const unsigned long DATA_SEND_INTERVAL = 50;
-// Send a heartbeat to the computer every second to indicate the system is connected
-const unsigned long HEARTBEAT_INTERVAL = 1000;
 
 // Function prototypes
 void setupGPIO();
@@ -94,7 +93,7 @@ void setupCAN();
 void sendVESCCommand(uint8_t can_id, uint8_t command, uint8_t* data, uint8_t len);
 void requestVESCStatus(uint8_t can_id);
 void processCANMessages();
-void parseVESCStatus(uint8_t vesc_id, uint8_t* data, uint8_t len);
+void parseVESCMessage(uint8_t vesc_id, uint8_t command, uint8_t* data, uint8_t len);
 void calculateDynoMetrics();
 void sendDataToPC();
 void processSerialCommands();
@@ -154,12 +153,6 @@ void loop() {
         last_data_send = current_time;
     }
     
-    // Send heartbeat to PC to confirm connection
-    if (current_time - last_heartbeat >= HEARTBEAT_INTERVAL) {
-        sendHeartbeat();
-        last_heartbeat = current_time;
-    }
-    
     // Process serial commands from PC immediately as they are received for quick control
     processSerialCommands();
     
@@ -195,6 +188,9 @@ void setupGPIO() {
 void setupCAN() {
     // Initialize SPI to communicate with the CAN transciever
     SPI.begin(SPI_SCK_PIN, SPI_MISO_PIN, SPI_MOSI_PIN);
+
+    //Create the MCP2515 instance now that SPI is set up
+    can_controller = new MCP2515(CAN_CS_PIN);
     
     // Reset the CAN transciever using the reset pin to get chip into valid start state
     digitalWrite(CAN_RST_PIN, LOW);
@@ -205,8 +201,8 @@ void setupCAN() {
     // Configure MCP2515 CAN controller
     // Set the bitrate to 500kbps and indicate that an 8MHz crystal is being used
     // This bitrate matches the default VESC CAN bus speed
-    can_controller.setBitrate(CAN_500KBPS, MCP_8MHZ);
-    can_controller.setNormalMode();
+    can_controller->setBitrate(CAN_500KBPS, MCP_8MHZ);
+    can_controller->setNormalMode();
     
     Serial.println("CAN controller initialized successfully");
     Serial.println("Drive VESC ID: 0x01, Brake VESC ID: 0x02");
@@ -220,46 +216,57 @@ void sendVESCCommand(uint8_t can_id, uint8_t command, uint8_t* data, uint8_t len
     frame.can_id = can_id;
     // frame length is command + data length
     frame.can_dlc = len + 1;
+    // Store the command in the first byte of the data package
     frame.data[0] = command;
     
     // Copy the data from the input data into the can frame data
+    // The data is sent as an array of bytes (8 bit integers) 
     for (uint8_t i = 0; i < len && i < 7; i++) {
         frame.data[i + 1] = data[i];
     }
     
     // Use the MCP2515 library to send the message by passing it the CAN frame
-    if (can_controller.sendMessage(&frame) != MCP2515::ERROR_OK) {
+    if (can_controller->sendMessage(&frame) != MCP2515::ERROR_OK) {
+        // If the can transciever returns a message, print this out for debugging
         Serial.println("Error sending CAN message");
     }
 }
 
+// Improved status request function
 void requestVESCStatus(uint8_t can_id) {
-    // The data field can be left empty when sending a request data message to the motor controllers
-    uint8_t data[1] = {0x00};
-    sendVESCCommand(can_id, CAN_PACKET_STATUS, data, 0);
+    // The VESC will automatically send status messages if configured in VESC Tool
+    // But you can also request specific status messages:
+    
+    // Request all status messages (if VESC is configured for it)
+    uint8_t empty_data[1] = {0x00};
+    
+    // Send empty frame to trigger status response (some VESC versions)
+    struct can_frame frame;
+    frame.can_id = can_id | ((uint32_t)CAN_PACKET_STATUS << 8);
+    frame.can_dlc = 0;
+    
+    if (can_controller->sendMessage(&frame) != MCP2515::ERROR_OK) {
+        Serial.println("Error requesting VESC status");
+    }
 }
 
 void processCANMessages() {
     struct can_frame frame;
     
-    // Check for incoming CAN messages by reading from the CAN transciever chip
-    if (can_controller.readMessage(&frame) == MCP2515::ERROR_OK) {
-
-        // Determine which motor controller sent the message
-        uint8_t vesc_id = frame.can_id;
+    // Check for incoming CAN messages
+    if (can_controller->readMessage(&frame) == MCP2515::ERROR_OK) {
+        // Extract VESC ID and command from extended CAN ID
+        uint8_t vesc_id = frame.can_id & 0xFF;           // Lower 8 bits = VESC ID
+        uint8_t can_command = (frame.can_id >> 8) & 0xFF; // Next 8 bits = Command
+        
         if (vesc_id == DRIVE_VESC_ID || vesc_id == BRAKE_VESC_ID) {
-            // Process VESC status message
-            if (frame.can_dlc > 0) {
-                uint8_t command = frame.data[0];
-                parseVESCStatus(vesc_id, &frame.data[1], frame.can_dlc - 1);
-            }
+            parseVESCMessage(vesc_id, can_command, frame.data, frame.can_dlc);
         }
     }
 }
 
-void parseVESCStatus(uint8_t vesc_id, uint8_t* data, uint8_t len) {
-    if (len < 7) return; // Minimum status packet size
-    
+
+void parseVESCMessage(uint8_t vesc_id, uint8_t command, uint8_t* data, uint8_t len) {
     VESCData* vesc_data = nullptr;
     
     if (vesc_id == DRIVE_VESC_ID) {
@@ -270,23 +277,72 @@ void parseVESCStatus(uint8_t vesc_id, uint8_t* data, uint8_t len) {
         return;
     }
     
-    // Parse VESC status data (simplified format)
-    // Actual VESC CAN protocol has specific byte ordering
-    vesc_data->rpm = (int32_t)((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]);
-    vesc_data->current = ((int16_t)((data[4] << 8) | data[5])) / 10.0f;
-    vesc_data->voltage = ((uint16_t)((data[6] << 8) | data[7])) / 10.0f;
+    int32_t index = 0;
     
-    if (len >= 11) {
-        vesc_data->temp_fet = ((int16_t)((data[8] << 8) | data[9])) / 10.0f;
-        vesc_data->temp_motor = ((int16_t)((data[10] << 8) | data[11])) / 10.0f;
+    switch (command) {
+        case CAN_PACKET_STATUS_1: {
+            // Status 1: RPM, Current, Duty Cycle
+            if (len >= 8) {
+                vesc_data->rpm = buffer_get_int32(data, &index);
+                vesc_data->current = buffer_get_float16(data, 10.0f, &index);
+                vesc_data->duty_cycle = buffer_get_float16(data, 1000.0f, &index);
+            }
+            break;
+        }
+        
+        case CAN_PACKET_STATUS_2: {
+            // Status 2: Amp Hours, Amp Hours Charged
+            if (len >= 8) {
+                vesc_data->amp_hours = buffer_get_float32(data, 10000.0f, &index);
+                vesc_data->amp_hours_charged = buffer_get_float32(data, 10000.0f, &index);
+            }
+            break;
+        }
+        
+        case CAN_PACKET_STATUS_3: {
+            // Status 3: Watt Hours, Watt Hours Charged
+            if (len >= 8) {
+                vesc_data->watt_hours = buffer_get_float32(data, 10000.0f, &index);
+                vesc_data->watt_hours_charged = buffer_get_float32(data, 10000.0f, &index);
+            }
+            break;
+        }
+        
+        case CAN_PACKET_STATUS_4: {
+            // Status 4: Temp FET, Temp Motor, Current In, PID Position
+            if (len >= 8) {
+                vesc_data->temp_fet = buffer_get_float16(data, 10.0f, &index);
+                vesc_data->temp_motor = buffer_get_float16(data, 10.0f, &index);
+                vesc_data->current_in = buffer_get_float16(data, 10.0f, &index);
+                vesc_data->pid_pos_now = buffer_get_float16(data, 50.0f, &index);
+            }
+            break;
+        }
+        
+        case CAN_PACKET_STATUS_5: {
+            // Status 5: Tacho Value, Input Voltage
+            if (len >= 6) {
+                vesc_data->tacho_value = buffer_get_int32(data, &index);
+                vesc_data->voltage_in = buffer_get_float16(data, 10.0f, &index);
+            }
+            break;
+        }
+        
+        case CAN_PACKET_STATUS_6: {
+            // Status 6: ADC1, ADC2, ADC3, PPM
+            // Implementation depends on your specific needs
+            break;
+        }
+        
+        default:
+            // Unknown or unhandled command
+            return;
     }
     
-    if (len >= 13) {
-        vesc_data->duty_cycle = ((int16_t)((data[12] << 8) | data[13])) / 1000.0f;
-    }
-    
-    vesc_data->data_age = 0; // Fresh data
+    // Update connection status
     vesc_data->connected = true;
+    vesc_data->data_age = 0;
+    vesc_data->last_update = millis();
 }
 
 void calculateDynoMetrics() {
@@ -398,6 +454,7 @@ void processSerialCommands() {
     }
 }
 
+// Send commands with proper CAN ID formatting
 void setDriveRPM(int32_t rpm) {
     dyno_data.target_rpm = rpm;
     
@@ -406,16 +463,21 @@ void setDriveRPM(int32_t rpm) {
     }
     
     // Convert RPM to ERPM (electrical RPM)
-    int32_t erpm = rpm * 7; // Assuming 7 pole pairs (motor dependent)
+    int32_t erpm = rpm * 7; // Motor pole pairs dependent
     
-    // Send RPM command to drive VESC
-    uint8_t data[4];
-    data[0] = (erpm >> 24) & 0xFF;
-    data[1] = (erpm >> 16) & 0xFF;
-    data[2] = (erpm >> 8) & 0xFF;
-    data[3] = erpm & 0xFF;
+    struct can_frame frame;
+    frame.can_id = DRIVE_VESC_ID | ((uint32_t)CAN_PACKET_SET_RPM << 8);
+    frame.can_dlc = 4;
     
-    sendVESCCommand(DRIVE_VESC_ID, CAN_PACKET_SET_RPM, data, 4);
+    // Pack ERPM as big-endian 32-bit integer
+    frame.data[0] = (erpm >> 24) & 0xFF;
+    frame.data[1] = (erpm >> 16) & 0xFF;
+    frame.data[2] = (erpm >> 8) & 0xFF;
+    frame.data[3] = erpm & 0xFF;
+    
+    if (can_controller->sendMessage(&frame) != MCP2515::ERROR_OK) {
+        Serial.println("Error sending RPM command");
+    }
 }
 
 void setBrakeLoad(float current) {
@@ -425,17 +487,22 @@ void setBrakeLoad(float current) {
         return;
     }
     
-    // Convert current to milliamps
-    int32_t current_ma = (int32_t)(current * 1000.0f);
+    // Convert current to scaled integer (scale factor: 1000)
+    int32_t current_scaled = (int32_t)(current * 1000.0f);
     
-    // Send current brake command to brake VESC
-    uint8_t data[4];
-    data[0] = (current_ma >> 24) & 0xFF;
-    data[1] = (current_ma >> 16) & 0xFF;
-    data[2] = (current_ma >> 8) & 0xFF;
-    data[3] = current_ma & 0xFF;
+    struct can_frame frame;
+    frame.can_id = BRAKE_VESC_ID | ((uint32_t)CAN_PACKET_SET_CURRENT_BRAKE << 8);
+    frame.can_dlc = 4;
     
-    sendVESCCommand(BRAKE_VESC_ID, CAN_PACKET_SET_CURRENT_BRAKE, data, 4);
+    // Pack current as big-endian 32-bit integer
+    frame.data[0] = (current_scaled >> 24) & 0xFF;
+    frame.data[1] = (current_scaled >> 16) & 0xFF;
+    frame.data[2] = (current_scaled >> 8) & 0xFF;
+    frame.data[3] = current_scaled & 0xFF;
+    
+    if (can_controller->sendMessage(&frame) != MCP2515::ERROR_OK) {
+        Serial.println("Error sending brake current command");
+    }
 }
 
 void enableDrive() {
@@ -537,4 +604,20 @@ void checkButtons() {
         
         last_power_source = current_power_source;
     }
+}
+
+void updateDataAge() {
+    unsigned long current_time = millis();
+    
+    // Check if data is getting stale
+    if (current_time - drive_data.last_update > 1000) {
+        drive_data.connected = false;
+    }
+    
+    if (current_time - brake_data.last_update > 1000) {
+        brake_data.connected = false;
+    }
+    
+    drive_data.data_age = current_time - drive_data.last_update;
+    brake_data.data_age = current_time - brake_data.last_update;
 }
