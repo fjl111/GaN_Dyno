@@ -67,11 +67,18 @@ class SerialHandler:
         self.connected = False
         self.data_callback = None
         self.error_callback = None
+        self.pong_callback = None
+        self.ack_callback = None
         
     def set_callbacks(self, data_callback, error_callback):
         """Set callback functions for data and errors."""
         self.data_callback = data_callback
         self.error_callback = error_callback
+        
+    def set_timing_callbacks(self, pong_callback, ack_callback):
+        """Set callback functions for timing responses."""
+        self.pong_callback = pong_callback
+        self.ack_callback = ack_callback
         
     def get_available_ports(self):
         """Get list of available serial ports."""
@@ -86,7 +93,7 @@ class SerialHandler:
             self.serial_thread = SerialThread(port, baudrate)
             
             if self.data_callback:
-                self.serial_thread.data_received.connect(self.data_callback)
+                self.serial_thread.data_received.connect(self._process_received_data)
             if self.error_callback:
                 self.serial_thread.error_occurred.connect(self.error_callback)
                 
@@ -116,6 +123,34 @@ class SerialHandler:
     def is_connected(self):
         """Check if connected to ESP32."""
         return self.connected
+        
+    def _process_received_data(self, line):
+        """Process received data and route to appropriate callbacks."""
+        if line.startswith("PONG:"):
+            # Handle PONG response
+            if self.pong_callback:
+                try:
+                    timestamp = int(line.split(":")[1])
+                    self.pong_callback(timestamp)
+                except (IndexError, ValueError):
+                    pass
+        elif line.startswith("ACK:"):
+            # Handle command acknowledgment
+            if self.ack_callback:
+                try:
+                    parts = line.split(":")
+                    if len(parts) >= 5:
+                        command = parts[1]
+                        receive_time = int(parts[2])
+                        send_time = int(parts[3])
+                        ack_time = int(parts[4])
+                        self.ack_callback(command, receive_time, send_time, ack_time)
+                except (IndexError, ValueError):
+                    pass
+        else:
+            # Regular data - pass to main data callback
+            if self.data_callback:
+                self.data_callback(line)
 
 
 class CommandInterface:
@@ -151,6 +186,18 @@ class CommandInterface:
     def send_raw_command(self, command):
         """Send raw command to ESP32."""
         return self.serial_handler.send_command(command)
+        
+    def enable_timing_mode(self):
+        """Enable timing mode on ESP32."""
+        return self.serial_handler.send_command("timing_on")
+        
+    def disable_timing_mode(self):
+        """Disable timing mode on ESP32."""
+        return self.serial_handler.send_command("timing_off")
+        
+    def send_ping(self):
+        """Send ping command to ESP32."""
+        return self.serial_handler.send_command("ping")
 
 
 class DataParser:

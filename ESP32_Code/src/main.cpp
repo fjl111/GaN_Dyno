@@ -62,7 +62,8 @@ struct DynoData {
     bool drive_enabled;
     bool brake_enabled;
     bool emergency_stop;
-    float mechanical_power;
+    float drive_power;
+    float brake_power;
     uint8_t power_source; // 0 = USB power, 1 = External power
 };
 
@@ -81,6 +82,11 @@ DynoData dyno_data = {0};
 unsigned long last_status_request = 0;
 unsigned long last_data_send = 0;
 unsigned long last_heartbeat = 0;
+
+// Response time testing variables
+unsigned long command_receive_time = 0;
+unsigned long can_send_time = 0;
+bool timing_active = false;
 
 // Set the frequency of the status checks
 // Send data to the computer every 100ms
@@ -104,6 +110,9 @@ void emergencyStop();
 void emergencyZero();
 void sendHeartbeat();
 void checkButtons();
+void handlePingCommand();
+void sendCommandAck(String command, unsigned long receive_time, unsigned long send_time);
+unsigned long getMicroseconds();
 
 void setup() {
     // Use a standard high baud rate to communicate over serial with laptop
@@ -321,10 +330,16 @@ void parseVESCMessage(uint8_t vesc_id, uint8_t command, uint8_t* data, uint8_t l
 }
 
 void calculateDynoMetrics() {
-    // Calculate mechanical power (simplified)
-    if (drive_data.connected && brake_data.connected) {
+    // Calculate drive power
+    if (drive_data.connected) {
         // Power = Voltage × Current (electrical power approximation)
-        dyno_data.mechanical_power = drive_data.voltage_in * drive_data.current;
+        dyno_data.drive_power = drive_data.voltage_in * drive_data.current;
+    }
+    
+    // Calculate brake power
+    if (brake_data.connected) {
+        // Power = Voltage × Current (electrical power approximation)
+        dyno_data.brake_power = brake_data.voltage_in * brake_data.current;
     }
     
     // Update data age
@@ -365,7 +380,8 @@ void sendDataToPC() {
     dyno["drive_enabled"] = dyno_data.drive_enabled;
     dyno["brake_enabled"] = dyno_data.brake_enabled;
     dyno["emergency_stop"] = dyno_data.emergency_stop;
-    dyno["mechanical_power"] = dyno_data.mechanical_power;
+    dyno["drive_power"] = dyno_data.drive_power;
+    dyno["brake_power"] = dyno_data.brake_power;
     dyno["power_source"] = dyno_data.power_source; // 0 = USB, 1 = External
     dyno["power_source_name"] = (dyno_data.power_source == 0) ? "USB" : "External";
     
@@ -379,31 +395,45 @@ void processSerialCommands() {
         String command = Serial.readStringUntil('\n');
         command.trim();
         
+        // Record command receive time for response time testing
+        command_receive_time = getMicroseconds();
+        
         if (command.startsWith("speed ")) {
             int32_t rpm = command.substring(6).toInt();
             setDriveRPM(rpm);
-            Serial.println("Drive RPM set to " + String(rpm));
+            sendCommandAck(command, command_receive_time, can_send_time);
             
         } else if (command.startsWith("load ")) {
             float current = command.substring(5).toFloat();
             setBrakeLoad(current);
-            Serial.println("Brake load set to " + String(current) + "A");
+            sendCommandAck(command, command_receive_time, can_send_time);
             
         } else if (command == "enable_drive") {
             enableDrive();
-            Serial.println("Drive motor enabled");
+            sendCommandAck(command, command_receive_time, 0);
             
         } else if (command == "enable_brake") {
             enableBrake();
-            Serial.println("Brake motor enabled");
+            sendCommandAck(command, command_receive_time, 0);
             
         } else if (command == "disable_all") {
             disableAll();
-            Serial.println("All motors disabled");
+            sendCommandAck(command, command_receive_time, can_send_time);
             
         } else if (command == "estop") {
             emergencyStop();
-            Serial.println("EMERGENCY STOP ACTIVATED");
+            sendCommandAck(command, command_receive_time, can_send_time);
+            
+        } else if (command == "ping") {
+            handlePingCommand();
+            
+        } else if (command == "timing_on") {
+            timing_active = true;
+            Serial.println("TIMING_MODE: ON");
+            
+        } else if (command == "timing_off") {
+            timing_active = false;
+            Serial.println("TIMING_MODE: OFF");
             
         } else {
             Serial.println("Unknown command: " + command);
@@ -432,6 +462,9 @@ void setDriveRPM(int32_t rpm) {
     frame.data[2] = (erpm >> 8) & 0xFF;
     frame.data[3] = erpm & 0xFF;
     
+    // Record CAN send time for response time testing
+    can_send_time = getMicroseconds();
+    
     if (can_controller->sendMessage(&frame) != MCP2515::ERROR_OK) {
         Serial.println("Error sending RPM command");
     }
@@ -456,6 +489,9 @@ void setBrakeLoad(float current) {
     frame.data[1] = (current_scaled >> 16) & 0xFF;
     frame.data[2] = (current_scaled >> 8) & 0xFF;
     frame.data[3] = current_scaled & 0xFF;
+    
+    // Record CAN send time for response time testing
+    can_send_time = getMicroseconds();
     
     if (can_controller->sendMessage(&frame) != MCP2515::ERROR_OK) {
         Serial.println("Error sending brake current command");
@@ -593,4 +629,21 @@ void updateDataAge() {
     
     drive_data.data_age = current_time - drive_data.last_update;
     brake_data.data_age = current_time - brake_data.last_update;
+}
+
+// Response time testing functions
+unsigned long getMicroseconds() {
+    return micros();
+}
+
+void handlePingCommand() {
+    unsigned long ping_time = getMicroseconds();
+    Serial.println("PONG:" + String(ping_time));
+}
+
+void sendCommandAck(String command, unsigned long receive_time, unsigned long send_time) {
+    if (timing_active) {
+        unsigned long ack_time = getMicroseconds();
+        Serial.println("ACK:" + command + ":" + String(receive_time) + ":" + String(send_time) + ":" + String(ack_time));
+    }
 }
