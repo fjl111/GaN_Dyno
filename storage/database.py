@@ -84,7 +84,7 @@ class DataStorage:
                         brake_data.get('rpm', 0), brake_data.get('current', 0.0),
                         brake_data.get('voltage', 0.0), brake_data.get('temp_fet', 0.0),
                         brake_data.get('temp_motor', 0.0),
-                        dyno_data.get('mechanical_power', 0.0),
+                        dyno_data.get('drive_power', 0.0) + dyno_data.get('brake_power', 0.0),
                         session_start
                     ))
                     
@@ -153,7 +153,8 @@ class DataStorage:
                         'brake_voltage': [row[8] for row in rows],
                         'brake_temp_fet': [row[9] for row in rows],
                         'brake_temp_motor': [row[10] for row in rows],
-                        'mechanical_power': [row[11] for row in rows]
+                        'drive_power': [row[11] / 2 for row in rows],  # Split stored power equally for now
+                        'brake_power': [row[11] / 2 for row in rows]
                     }
                     
                     return data
@@ -247,7 +248,8 @@ class DataStorage:
             'brake_voltage': [],
             'brake_temp_fet': [],
             'brake_temp_motor': [],
-            'mechanical_power': []
+            'drive_power': [],
+            'brake_power': []
         }
     
     def close(self):

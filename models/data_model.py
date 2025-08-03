@@ -43,7 +43,8 @@ class DynamometerData:
         self.brake_temp_motor = deque(maxlen=max_points)
         
         # Dyno metrics
-        self.mechanical_power = deque(maxlen=max_points)
+        self.drive_power = deque(maxlen=max_points)
+        self.brake_power = deque(maxlen=max_points)
         
         # Current values for display
         self.current_values = {
@@ -58,7 +59,7 @@ class DynamometerData:
             'dyno': {
                 'target_rpm': 0, 'target_load': 0.0, 'drive_enabled': False,
                 'brake_enabled': False, 'emergency_stop': False, 
-                'mechanical_power': 0.0
+                'drive_power': 0.0, 'brake_power': 0.0
             }
         }
         
@@ -117,7 +118,8 @@ class DynamometerData:
             self.brake_temp_fet.append(self.current_values['brake']['temp_fet'])
             self.brake_temp_motor.append(self.current_values['brake']['temp_motor'])
             
-            self.mechanical_power.append(self.current_values['dyno']['mechanical_power'])
+            self.drive_power.append(self.current_values['dyno']['drive_power'])
+            self.brake_power.append(self.current_values['dyno']['brake_power'])
             
             # Store data point in database
             if self.session_start_time:
@@ -138,7 +140,7 @@ class DynamometerData:
             'time': timestamp,
             'rpm': self.current_values['drive']['rpm'],
             'load_current': self.current_values['brake']['current'],
-            'power': self.current_values['dyno']['mechanical_power'],
+            'power': self.current_values['dyno']['drive_power'] + self.current_values['dyno']['brake_power'],
             'temp_fet': max(self.current_values['drive']['temp_fet'], 
                           self.current_values['brake']['temp_fet']),
             'temp_motor': max(self.current_values['drive']['temp_motor'], 
@@ -165,7 +167,8 @@ class DynamometerData:
         self.brake_voltage.clear()
         self.brake_temp_fet.clear()
         self.brake_temp_motor.clear()
-        self.mechanical_power.clear()
+        self.drive_power.clear()
+        self.brake_power.clear()
         
     def get_plot_data(self, time_range_seconds=None):
         """
@@ -187,7 +190,8 @@ class DynamometerData:
                 'brake_current': list(self.brake_current),
                 'brake_temp_fet': list(self.brake_temp_fet),
                 'brake_temp_motor': list(self.brake_temp_motor),
-                'mechanical_power': list(self.mechanical_power)
+                'drive_power': list(self.drive_power),
+                'brake_power': list(self.brake_power)
             }
         else:
             # Get data from database for specified time range

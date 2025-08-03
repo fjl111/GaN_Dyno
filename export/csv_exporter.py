@@ -113,7 +113,7 @@ class CSVExporter:
         
         fieldnames = ['timestamp', 'drive_rpm', 'drive_current', 'drive_temp_fet', 
                      'drive_temp_motor', 'brake_rpm', 'brake_current', 'brake_temp_fet', 
-                     'brake_temp_motor', 'mechanical_power']
+                     'brake_temp_motor', 'drive_power', 'brake_power']
         
         with open(filename, 'w', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -133,7 +133,8 @@ class CSVExporter:
                     'brake_current': plot_data['brake_current'][i],
                     'brake_temp_fet': plot_data['brake_temp_fet'][i],
                     'brake_temp_motor': plot_data['brake_temp_motor'][i],
-                    'mechanical_power': plot_data['mechanical_power'][i]
+                    'drive_power': plot_data['drive_power'][i],
+                    'brake_power': plot_data['brake_power'][i]
                 }
                 writer.writerow(row)
                 

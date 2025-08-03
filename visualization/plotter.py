@@ -79,7 +79,7 @@ class DynamometerPlotter:
         self.ax_rpm.tick_params(axis='both', which='major', labelsize=tick_fontsize)
         
         # Power plot
-        self.ax_power.set_title('Mechanical Power', fontsize=title_fontsize, fontweight='bold')
+        self.ax_power.set_title('Power', fontsize=title_fontsize, fontweight='bold')
         self.ax_power.set_ylabel('Power (W)', fontsize=label_fontsize)
         self.ax_power.set_xlabel('Time (s)', fontsize=label_fontsize)
         self.ax_power.grid(True, alpha=0.3, linestyle='--')
@@ -106,7 +106,9 @@ class DynamometerPlotter:
         self.rpm_brake_line, = self.ax_rpm.plot([], [], 'r-', linewidth=2.5, label='Brake RPM')
         self.ax_rpm.legend(fontsize=7)
         
-        self.power_line, = self.ax_power.plot([], [], 'r-', linewidth=2.5, label='Power')
+        self.drive_power_line, = self.ax_power.plot([], [], 'b-', linewidth=2.5, label='Drive Power')
+        self.brake_power_line, = self.ax_power.plot([], [], 'r-', linewidth=2.5, label='Brake Power')
+        self.ax_power.legend(fontsize=7)
         
         self.temp_drive_fet_line, = self.ax_temp.plot([], [], 'r-', linewidth=2.5, label='Drive FET')
         self.temp_drive_motor_line, = self.ax_temp.plot([], [], 'orange', linewidth=2.5, label='Drive Motor')
@@ -120,7 +122,7 @@ class DynamometerPlotter:
         
         # Store all line objects for easy access
         self.all_lines = [
-            self.rpm_drive_line, self.rpm_brake_line, self.power_line,
+            self.rpm_drive_line, self.rpm_brake_line, self.drive_power_line, self.brake_power_line,
             self.temp_drive_fet_line, self.temp_drive_motor_line, 
             self.temp_brake_fet_line, self.temp_brake_motor_line,
             self.current_drive_line, self.current_brake_line
@@ -147,8 +149,10 @@ class DynamometerPlotter:
             text = f"Drive RPM\nTime: {x:.1f}s\nRPM: {y:.0f}"
         elif line == self.rpm_brake_line:
             text = f"Brake RPM\nTime: {x:.1f}s\nRPM: {y:.0f}"
-        elif line == self.power_line:
-            text = f"Mechanical Power\nTime: {x:.1f}s\nPower: {y:.1f}W"
+        elif line == self.drive_power_line:
+            text = f"Drive Power\nTime: {x:.1f}s\nPower: {y:.1f}W"
+        elif line == self.brake_power_line:
+            text = f"Brake Power\nTime: {x:.1f}s\nPower: {y:.1f}W"
         elif line == self.temp_drive_fet_line:
             text = f"Drive FET Temp\nTime: {x:.1f}s\nTemp: {y:.1f}°C"
         elif line == self.temp_drive_motor_line:
@@ -210,7 +214,8 @@ class DynamometerPlotter:
         # Update line data efficiently
         self.rpm_drive_line.set_data(times, filtered_data['drive_rpm'])
         self.rpm_brake_line.set_data(times, filtered_data['brake_rpm'])
-        self.power_line.set_data(times, filtered_data['mechanical_power'])
+        self.drive_power_line.set_data(times, filtered_data['drive_power'])
+        self.brake_power_line.set_data(times, filtered_data['brake_power'])
         self.temp_drive_fet_line.set_data(times, filtered_data['drive_temp_fet'])
         self.temp_drive_motor_line.set_data(times, filtered_data['drive_temp_motor'])
         self.temp_brake_fet_line.set_data(times, filtered_data['brake_temp_fet'])
@@ -249,11 +254,18 @@ class DynamometerPlotter:
                                rpm_max + rpm_range * padding_factor)
                                
         # Power plot
-        if len(data['mechanical_power']) > 0:
-            power_min, power_max = np.min(data['mechanical_power']), np.max(data['mechanical_power'])
-            power_range = power_max - power_min
-            self.ax_power.set_ylim(power_min - power_range * padding_factor,
-                                 power_max + power_range * padding_factor)
+        if len(data['drive_power']) > 0 or len(data['brake_power']) > 0:
+            all_power_values = []
+            if len(data['drive_power']) > 0:
+                all_power_values.extend(data['drive_power'])
+            if len(data['brake_power']) > 0:
+                all_power_values.extend(data['brake_power'])
+            
+            if all_power_values:
+                power_min, power_max = np.min(all_power_values), np.max(all_power_values)
+                power_range = power_max - power_min
+                self.ax_power.set_ylim(power_min - power_range * padding_factor,
+                                     power_max + power_range * padding_factor)
                                  
         # Temperature plot
         temp_data = np.concatenate([data['drive_temp_fet'], data['drive_temp_motor'],

@@ -63,7 +63,7 @@ class DataDisplayWidget(QWidget):
         dyno_layout = QGridLayout(dyno_group)
         
         row = 0
-        for key in ['target_rpm', 'target_load', 'mechanical_power']:
+        for key in ['target_rpm', 'target_load', 'drive_power', 'brake_power']:
             label_text = key.replace('_', ' ').title() + ":"
             dyno_layout.addWidget(QLabel(label_text), row, 0)
             

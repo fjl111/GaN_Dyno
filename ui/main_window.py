@@ -23,6 +23,7 @@ from ui.widgets.data_display_widget import DataDisplayWidget
 from ui.widgets.console_widget import ConsoleWidget
 from ui.widgets.results_widget import ResultsWidget
 from ui.widgets.chart_controls_widget import ChartControlsWidget
+from ui.widgets.response_time_widget import ResponseTimeWidget
 
 
 class DynamometerMainWindow(QMainWindow):
@@ -119,6 +120,10 @@ class DynamometerMainWindow(QMainWindow):
         self.console_widget = ConsoleWidget()
         self.tabs.addTab(self.console_widget, "Console")
         
+        # Response Time Testing tab
+        self.response_time_widget = ResponseTimeWidget(self.command_interface, self.data_model)
+        self.tabs.addTab(self.response_time_widget, "Response Time Tests")
+        
         # Initially disable controls
         self.set_controls_enabled(False)
         
@@ -152,6 +157,12 @@ class DynamometerMainWindow(QMainWindow):
         
         # Serial handler callbacks
         self.serial_handler.set_callbacks(self.process_data, self.handle_serial_error)
+        
+        # Setup timing callbacks for response time testing
+        self.serial_handler.set_timing_callbacks(
+            self.response_time_widget.ping_test.process_pong_response,
+            self._handle_ack_callback
+        )
         
         # Test controller callbacks
         self.test_controller.set_callbacks(self.update_test_status, self.on_test_complete)
@@ -367,11 +378,21 @@ class DynamometerMainWindow(QMainWindow):
                     f"Failed to export chart view:\n{str(e)}"
                 )
         
+    def _handle_ack_callback(self, command, receive_time, send_time, ack_time):
+        """Handle ACK responses for timing analysis."""
+        # Log timing information to console
+        processing_time = send_time - receive_time
+        total_time = ack_time - receive_time
+        self.console_widget.log_info(f"Timing - {command}: proc={processing_time}μs, total={total_time}μs")
+    
     def set_controls_enabled(self, enabled):
         """Enable/disable control widgets."""
         self.control_widget.set_enabled(enabled)
         self.test_widget.set_enabled(enabled)
         self.console_widget.set_input_enabled(enabled)
+        # Response time widget should be enabled when connected
+        if hasattr(self, 'response_time_widget'):
+            self.response_time_widget.setEnabled(enabled)
         
     def closeEvent(self, event):
         """Handle application closing."""
