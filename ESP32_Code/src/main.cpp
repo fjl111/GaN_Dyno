@@ -492,14 +492,8 @@ void emergencyStop() {
 }
 
 void emergencyZero() {
-    // Send zero RPM command directly (bypasses safety checks)
+    // Send zero current commands only (bypasses safety checks)
     struct can_frame frame;
-    
-    // Zero RPM to drive motor
-    frame.can_id = DRIVE_VESC_ID | ((uint32_t)CAN_PACKET_SET_RPM << 8) | CAN_EFF_FLAG;
-    frame.can_dlc = 4;
-    frame.data[0] = 0; frame.data[1] = 0; frame.data[2] = 0; frame.data[3] = 0;
-    can_controller->sendMessage(&frame);
     
     // Zero current to brake motor
     frame.can_id = BRAKE_VESC_ID | ((uint32_t)CAN_PACKET_SET_CURRENT_BRAKE << 8) | CAN_EFF_FLAG;

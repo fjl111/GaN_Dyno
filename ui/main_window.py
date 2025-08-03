@@ -5,7 +5,7 @@ Coordinates all components and handles the main application logic.
 
 import sys
 import json
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QTabWidget, 
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, 
                              QMessageBox, QApplication)
 from PyQt5.QtCore import pyqtSlot, Qt, QTimer
 from PyQt5.QtGui import QFont, QPalette, QColor
@@ -22,6 +22,7 @@ from ui.widgets.test_widget import TestWidget
 from ui.widgets.data_display_widget import DataDisplayWidget
 from ui.widgets.console_widget import ConsoleWidget
 from ui.widgets.results_widget import ResultsWidget
+from ui.widgets.chart_controls_widget import ChartControlsWidget
 
 
 class DynamometerMainWindow(QMainWindow):
@@ -59,25 +60,47 @@ class DynamometerMainWindow(QMainWindow):
         
         # Main layout
         main_layout = QVBoxLayout(central_widget)
+        main_layout.setSpacing(5)  # Reduce spacing between elements
+        
+        # Create top row controls layout (connection and speed control)
+        top_row_layout = QHBoxLayout()
+        top_row_layout.setSpacing(15)
         
         # Create widgets
         self.connection_widget = ConnectionWidget()
         self.control_widget = ControlWidget()
         self.test_widget = TestWidget()
         
-        # Add widgets to layout
-        main_layout.addWidget(self.connection_widget)
-        main_layout.addWidget(self.control_widget)
+        # Add connection and control widgets to top row
+        top_row_layout.addWidget(self.connection_widget)
+        top_row_layout.addWidget(self.control_widget)
+        top_row_layout.addStretch()  # Push everything to the left
+        
+        # Add the layouts to main layout
+        main_layout.addLayout(top_row_layout)
         main_layout.addWidget(self.test_widget)
         
         # Create tabs
         self.tabs = QTabWidget()
         main_layout.addWidget(self.tabs)
         
-        # Charts tab
+        # Charts tab with controls
         self.charts_widget = QWidget()
         self.tabs.addTab(self.charts_widget, "Real-time Charts")
-        self.plotter = DynamometerPlotter(self.charts_widget)
+        
+        # Create chart layout with controls
+        charts_layout = QVBoxLayout(self.charts_widget)
+        
+        # Add chart controls
+        self.chart_controls = ChartControlsWidget()
+        charts_layout.addWidget(self.chart_controls)
+        
+        # Create plotter container
+        self.plotter_widget = QWidget()
+        charts_layout.addWidget(self.plotter_widget)
+        
+        # Create plotter
+        self.plotter = DynamometerPlotter(self.plotter_widget)
         self.plotter.set_data_model(self.data_model)
         
         # Data display tab
@@ -119,6 +142,9 @@ class DynamometerMainWindow(QMainWindow):
         
         # Console widget signals
         self.console_widget.command_requested.connect(self.send_console_command)
+        
+        # Chart controls signals
+        self.chart_controls.time_range_changed.connect(self.plotter.set_time_range)
         
         # Serial handler callbacks
         self.serial_handler.set_callbacks(self.process_data, self.handle_serial_error)
@@ -292,6 +318,35 @@ class DynamometerMainWindow(QMainWindow):
         self.control_widget.update_brake_enabled(
             self.data_model.current_values['dyno']['brake_enabled'])
             
+    def export_chart_view(self):
+        """Export current chart view to image file."""
+        from PyQt5.QtWidgets import QFileDialog
+        import matplotlib.pyplot as plt
+        
+        # Get save file path
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Chart View", "chart_view.png",
+            "PNG files (*.png);;PDF files (*.pdf);;SVG files (*.svg)"
+        )
+        
+        if file_path:
+            try:
+                # Save the current figure
+                self.plotter.fig.savefig(file_path, dpi=300, bbox_inches='tight')
+                self.console_widget.log_info(f"Chart view exported to: {file_path}")
+                
+                # Show success message
+                QMessageBox.information(
+                    self, "Export Successful", 
+                    f"Chart view successfully exported to:\n{file_path}"
+                )
+            except Exception as e:
+                self.console_widget.log_error(f"Export failed: {str(e)}")
+                QMessageBox.warning(
+                    self, "Export Failed", 
+                    f"Failed to export chart view:\n{str(e)}"
+                )
+        
     def set_controls_enabled(self, enabled):
         """Enable/disable control widgets."""
         self.control_widget.set_enabled(enabled)

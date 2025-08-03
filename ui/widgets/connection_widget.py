@@ -23,27 +23,35 @@ class ConnectionWidget(QWidget):
         
     def setup_ui(self):
         """Create the connection UI."""
-        # Create group box
+        # Create group box with reduced height
         group_box = QGroupBox("Connection")
+        group_box.setMaximumHeight(80)
         layout = QHBoxLayout(self)
+        layout.setContentsMargins(5, 5, 5, 5)
         layout.addWidget(group_box)
         
         # Group box layout
         group_layout = QHBoxLayout(group_box)
+        group_layout.setSpacing(8)
+        group_layout.setContentsMargins(8, 8, 8, 8)
         
         # Port selection
         group_layout.addWidget(QLabel("Port:"))
         self.port_combo = QComboBox()
-        self.port_combo.setMinimumWidth(150)
+        self.port_combo.setMinimumWidth(120)
+        self.port_combo.setMaximumWidth(150)
         group_layout.addWidget(self.port_combo)
         
-        # Refresh button
-        self.refresh_button = QPushButton("Refresh")
+        # Refresh button (smaller)
+        self.refresh_button = QPushButton("↻")
+        self.refresh_button.setMaximumWidth(30)
+        self.refresh_button.setToolTip("Refresh available ports")
         self.refresh_button.clicked.connect(self.refresh_ports_requested.emit)
         group_layout.addWidget(self.refresh_button)
         
         # Connect button
         self.connect_button = QPushButton("Connect")
+        self.connect_button.setMinimumWidth(80)
         self.connect_button.clicked.connect(self._on_connect_clicked)
         group_layout.addWidget(self.connect_button)
         

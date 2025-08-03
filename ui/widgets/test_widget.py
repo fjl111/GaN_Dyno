@@ -3,8 +3,8 @@ Test automation widget for dynamometer interface.
 Handles automated test sequence controls.
 """
 
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QGroupBox, QLabel, 
-                             QPushButton, QLineEdit, QGridLayout)
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, 
+                             QPushButton, QLineEdit, QSizePolicy)
 from PyQt5.QtCore import pyqtSignal
 
 
@@ -22,43 +22,78 @@ class TestWidget(QWidget):
         """Create the test automation UI."""
         # Main layout
         main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(5, 5, 5, 5)
         
-        # Create group box
+        # Create group box with reduced height
         group_box = QGroupBox("Automated Testing")
+        group_box.setMaximumHeight(80)
         main_layout.addWidget(group_box)
         
-        # Group box layout
-        group_layout = QGridLayout(group_box)
+        # Group box layout - horizontal for compactness
+        group_layout = QHBoxLayout(group_box)
+        group_layout.setSpacing(0)  # No spacing - we'll control it manually
+        group_layout.setContentsMargins(8, 8, 8, 8)
         
-        # Speed sweep controls
-        group_layout.addWidget(QLabel("Speed Sweep:"), 0, 0)
-        group_layout.addWidget(QLabel("Start RPM:"), 0, 1)
+        # Sweep label
+        sweep_label = QLabel("Sweep:")
+        sweep_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        group_layout.addWidget(sweep_label)
+        group_layout.addSpacing(10)
+        
+        # Start label and input - tightly coupled
+        start_label = QLabel("Start:")
+        start_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        group_layout.addWidget(start_label)
+        
         self.sweep_start_input = QLineEdit("0")
-        self.sweep_start_input.setMaximumWidth(80)
-        group_layout.addWidget(self.sweep_start_input, 0, 2)
+        self.sweep_start_input.setFixedWidth(60)
+        self.sweep_start_input.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        group_layout.addWidget(self.sweep_start_input)
+        group_layout.addSpacing(25)
         
-        group_layout.addWidget(QLabel("End RPM:"), 0, 3)
+        # End label and input - tightly coupled
+        end_label = QLabel("End:")
+        end_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        group_layout.addWidget(end_label)
+        
         self.sweep_end_input = QLineEdit("5000")
-        self.sweep_end_input.setMaximumWidth(80)
-        group_layout.addWidget(self.sweep_end_input, 0, 4)
+        self.sweep_end_input.setFixedWidth(60)
+        self.sweep_end_input.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        group_layout.addWidget(self.sweep_end_input)
+        group_layout.addSpacing(25)
         
-        group_layout.addWidget(QLabel("Steps:"), 0, 5)
+        # Steps label and input - tightly coupled
+        steps_label = QLabel("Steps:")
+        steps_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        group_layout.addWidget(steps_label)
+        
         self.sweep_steps_input = QLineEdit("10")
-        self.sweep_steps_input.setMaximumWidth(60)
-        group_layout.addWidget(self.sweep_steps_input, 0, 6)
+        self.sweep_steps_input.setFixedWidth(50)
+        self.sweep_steps_input.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        group_layout.addWidget(self.sweep_steps_input)
+        group_layout.addSpacing(25)
         
-        self.start_sweep_button = QPushButton("Start Speed Sweep")
+        self.start_sweep_button = QPushButton("Start")
+        self.start_sweep_button.setMaximumWidth(60)
         self.start_sweep_button.clicked.connect(self._on_start_sweep_clicked)
-        group_layout.addWidget(self.start_sweep_button, 0, 7)
+        group_layout.addWidget(self.start_sweep_button)
         
-        self.stop_test_button = QPushButton("Stop Test")
+        # Add spacing between start and stop buttons
+        group_layout.addSpacing(10)
+        
+        self.stop_test_button = QPushButton("Stop")
+        self.stop_test_button.setMaximumWidth(60)
         self.stop_test_button.clicked.connect(self.test_stop_requested.emit)
         self.stop_test_button.setEnabled(False)
-        group_layout.addWidget(self.stop_test_button, 0, 8)
+        group_layout.addWidget(self.stop_test_button)
+        
+        # Add stretch to push status label to the right
+        group_layout.addStretch()
         
         # Test status
-        self.test_status_label = QLabel("No test running")
-        group_layout.addWidget(self.test_status_label, 1, 0, 1, 9)
+        self.test_status_label = QLabel("Ready")
+        self.test_status_label.setStyleSheet("color: green; font-weight: bold;")
+        group_layout.addWidget(self.test_status_label)
         
     def _on_start_sweep_clicked(self):
         """Handle start sweep button click."""

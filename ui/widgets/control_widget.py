@@ -34,73 +34,82 @@ class ControlWidget(QWidget):
         """Create the control UI."""
         # Main layout
         main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(5, 5, 5, 5)
         
-        # Create group box
+        # Create group box with reduced height
         group_box = QGroupBox("Dynamometer Control")
+        group_box.setMaximumHeight(80)
         main_layout.addWidget(group_box)
         
         # Group box layout
         group_layout = QHBoxLayout(group_box)
+        group_layout.setSpacing(15)
+        group_layout.setContentsMargins(8, 8, 8, 8)
         
-        # Drive motor controls
-        drive_group = QGroupBox("Drive Motor (Spinning)")
-        drive_layout = QGridLayout(drive_group)
+        # Drive motor controls - compact inline layout
+        drive_layout = QHBoxLayout()
+        drive_layout.addWidget(QLabel("RPM:"))
         
-        drive_layout.addWidget(QLabel("Target RPM:"), 0, 0)
         self.target_rpm_input = QLineEdit("0")
         self.target_rpm_input.setMaximumWidth(100)
-        drive_layout.addWidget(self.target_rpm_input, 0, 1)
+        drive_layout.addWidget(self.target_rpm_input)
         
         # RPM up/down buttons
         self.rpm_down_button = QPushButton("-")
-        self.rpm_down_button.setMaximumWidth(30)
+        self.rpm_down_button.setMaximumWidth(25)
         self.rpm_down_button.clicked.connect(self._on_rpm_down_clicked)
-        drive_layout.addWidget(self.rpm_down_button, 0, 2)
+        drive_layout.addWidget(self.rpm_down_button)
         
         self.rpm_up_button = QPushButton("+")
-        self.rpm_up_button.setMaximumWidth(30)
+        self.rpm_up_button.setMaximumWidth(25)
         self.rpm_up_button.clicked.connect(self._on_rpm_up_clicked)
-        drive_layout.addWidget(self.rpm_up_button, 0, 3)
+        drive_layout.addWidget(self.rpm_up_button)
         
-        self.set_speed_button = QPushButton("Set Speed")
+        self.set_speed_button = QPushButton("Set")
+        self.set_speed_button.setMaximumWidth(50)
         self.set_speed_button.clicked.connect(self._on_set_speed_clicked)
-        drive_layout.addWidget(self.set_speed_button, 0, 4)
+        drive_layout.addWidget(self.set_speed_button)
         
-        self.drive_enabled_checkbox = QCheckBox("Enable Drive")
+        self.drive_enabled_checkbox = QCheckBox("Drive")
         self.drive_enabled_checkbox.stateChanged.connect(self._on_drive_enable_changed)
-        drive_layout.addWidget(self.drive_enabled_checkbox, 1, 0, 1, 5)
+        drive_layout.addWidget(self.drive_enabled_checkbox)
         
-        group_layout.addWidget(drive_group)
+        group_layout.addLayout(drive_layout)
         
-        # Brake motor controls
-        brake_group = QGroupBox("Brake Motor (Load)")
-        brake_layout = QGridLayout(brake_group)
+        # Separator
+        separator = QLabel("|")
+        separator.setStyleSheet("color: gray; font-weight: bold;")
+        group_layout.addWidget(separator)
         
-        brake_layout.addWidget(QLabel("Load Current (A):"), 0, 0)
+        # Brake motor controls - compact inline layout
+        brake_layout = QHBoxLayout()
+        brake_layout.addWidget(QLabel("Load (A):"))
+        
         self.target_load_input = QLineEdit("0")
         self.target_load_input.setMaximumWidth(100)
-        brake_layout.addWidget(self.target_load_input, 0, 1)
+        brake_layout.addWidget(self.target_load_input)
         
         # Current up/down buttons
         self.current_down_button = QPushButton("-")
-        self.current_down_button.setMaximumWidth(30)
+        self.current_down_button.setMaximumWidth(25)
         self.current_down_button.clicked.connect(self._on_current_down_clicked)
-        brake_layout.addWidget(self.current_down_button, 0, 2)
+        brake_layout.addWidget(self.current_down_button)
         
         self.current_up_button = QPushButton("+")
-        self.current_up_button.setMaximumWidth(30)
+        self.current_up_button.setMaximumWidth(25)
         self.current_up_button.clicked.connect(self._on_current_up_clicked)
-        brake_layout.addWidget(self.current_up_button, 0, 3)
+        brake_layout.addWidget(self.current_up_button)
         
-        self.set_load_button = QPushButton("Set Load")
+        self.set_load_button = QPushButton("Set")
+        self.set_load_button.setMaximumWidth(50)
         self.set_load_button.clicked.connect(self._on_set_load_clicked)
-        brake_layout.addWidget(self.set_load_button, 0, 4)
+        brake_layout.addWidget(self.set_load_button)
         
-        self.brake_enabled_checkbox = QCheckBox("Enable Brake")
+        self.brake_enabled_checkbox = QCheckBox("Brake")
         self.brake_enabled_checkbox.stateChanged.connect(self._on_brake_enable_changed)
-        brake_layout.addWidget(self.brake_enabled_checkbox, 1, 0, 1, 5)
+        brake_layout.addWidget(self.brake_enabled_checkbox)
         
-        group_layout.addWidget(brake_group)
+        group_layout.addLayout(brake_layout)
         
     def _on_set_speed_clicked(self):
         """Handle set speed button click."""
