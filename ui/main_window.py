@@ -156,6 +156,9 @@ class DynamometerMainWindow(QMainWindow):
         
         # Chart controls signals
         self.chart_controls.time_range_changed.connect(self.plotter.set_time_range)
+        self.chart_controls.export_current_data_requested.connect(self.export_current_values)
+        self.chart_controls.export_visible_data_requested.connect(self.export_visible_data)
+        self.chart_controls.export_all_data_requested.connect(self.export_all_session_data)
         
         # Serial handler callbacks
         self.serial_handler.set_callbacks(self.process_data, self.handle_serial_error)
@@ -300,6 +303,31 @@ class DynamometerMainWindow(QMainWindow):
             self.console_widget.log_info(message)
         else:
             self.console_widget.log_error(message)
+    
+    def export_current_values(self):
+        """Export current motor values snapshot to CSV."""
+        success, message = self.csv_exporter.export_current_values(self.data_model)
+        if success:
+            self.console_widget.log_info(message)
+        else:
+            self.console_widget.log_error(message)
+    
+    def export_visible_data(self):
+        """Export data for the currently visible time range to CSV."""
+        time_range = self.chart_controls.get_current_time_range()
+        success, message = self.csv_exporter.export_time_range_data(self.data_model, time_range)
+        if success:
+            self.console_widget.log_info(message)
+        else:
+            self.console_widget.log_error(message)
+    
+    def export_all_session_data(self):
+        """Export all session data to CSV."""
+        success, message = self.csv_exporter.export_full_session_data(self.data_model)
+        if success:
+            self.console_widget.log_info(message)
+        else:
+            self.console_widget.log_error(message)
             
     def send_console_command(self, command):
         """Send raw command from console."""
@@ -439,6 +467,7 @@ class DynamometerMainWindow(QMainWindow):
         self.control_widget.set_enabled(enabled)
         self.test_widget.set_enabled(enabled)
         self.console_widget.set_input_enabled(enabled)
+        self.chart_controls.set_export_enabled(enabled)
         # Response time widget should be enabled when connected
         if hasattr(self, 'response_time_widget'):
             self.response_time_widget.setEnabled(enabled)

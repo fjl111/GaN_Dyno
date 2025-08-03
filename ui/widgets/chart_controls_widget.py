@@ -4,7 +4,7 @@ Provides interactive controls for chart display and performance settings.
 """
 
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QGroupBox, 
-                             QLabel, QSlider)
+                             QLabel, QSlider, QPushButton)
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QFont
 
@@ -12,8 +12,11 @@ from PyQt5.QtGui import QFont
 class ChartControlsWidget(QWidget):
     """Widget for controlling chart time range display."""
     
-    # Signal for communicating with plotter
+    # Signals for communicating with main window
     time_range_changed = pyqtSignal(int)  # seconds
+    export_current_data_requested = pyqtSignal()
+    export_visible_data_requested = pyqtSignal()
+    export_all_data_requested = pyqtSignal()
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -47,6 +50,31 @@ class ChartControlsWidget(QWidget):
         time_layout.addWidget(self.time_label)
         
         main_layout.addWidget(time_group)
+        
+        # Export controls
+        export_group = QGroupBox("Export Data")
+        export_layout = QVBoxLayout(export_group)
+        
+        # Export buttons
+        export_buttons_layout = QHBoxLayout()
+        
+        self.export_current_btn = QPushButton("Export Current Values")
+        self.export_current_btn.setToolTip("Export snapshot of current motor values")
+        self.export_current_btn.clicked.connect(self.export_current_data_requested.emit)
+        export_buttons_layout.addWidget(self.export_current_btn)
+        
+        self.export_visible_btn = QPushButton("Export Visible Data")
+        self.export_visible_btn.setToolTip("Export data for the currently visible time range")
+        self.export_visible_btn.clicked.connect(self.export_visible_data_requested.emit)
+        export_buttons_layout.addWidget(self.export_visible_btn)
+        
+        self.export_all_btn = QPushButton("Export All Session Data")
+        self.export_all_btn.setToolTip("Export all data from the current session")
+        self.export_all_btn.clicked.connect(self.export_all_data_requested.emit)
+        export_buttons_layout.addWidget(self.export_all_btn)
+        
+        export_layout.addLayout(export_buttons_layout)
+        main_layout.addWidget(export_group)
         
     def connect_signals(self):
         """Connect widget signals to internal handlers."""
@@ -97,3 +125,9 @@ class ChartControlsWidget(QWidget):
             0: 10, 1: 30, 2: 60, 3: 120, 4: 300, 5: 600, 6: 0
         }
         return time_map.get(value, 60)
+    
+    def set_export_enabled(self, enabled):
+        """Enable/disable export buttons."""
+        self.export_current_btn.setEnabled(enabled)
+        self.export_visible_btn.setEnabled(enabled)
+        self.export_all_btn.setEnabled(enabled)
