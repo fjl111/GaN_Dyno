@@ -169,11 +169,15 @@ class ControlWidget(QWidget):
         
     def update_drive_enabled(self, enabled):
         """Update drive enable checkbox."""
+        self.drive_enabled_checkbox.blockSignals(True)
         self.drive_enabled_checkbox.setChecked(enabled)
+        self.drive_enabled_checkbox.blockSignals(False)
         
     def update_brake_enabled(self, enabled):
         """Update brake enable checkbox."""
+        self.brake_enabled_checkbox.blockSignals(True)
         self.brake_enabled_checkbox.setChecked(enabled)
+        self.brake_enabled_checkbox.blockSignals(False)
         
     def get_target_rpm(self):
         """Get target RPM value."""

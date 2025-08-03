@@ -103,6 +103,10 @@ class DynamometerMainWindow(QMainWindow):
         self.plotter = DynamometerPlotter(self.plotter_widget)
         self.plotter.set_data_model(self.data_model)
         
+        # Sync initial time range from chart controls
+        initial_time_range = self.chart_controls.get_current_time_range()
+        self.plotter.set_time_range(initial_time_range)
+        
         # Data display tab
         self.data_display_widget = DataDisplayWidget()
         self.tabs.addTab(self.data_display_widget, "Current Values")
@@ -312,11 +316,15 @@ class DynamometerMainWindow(QMainWindow):
         # Update data display
         self.data_display_widget.update_data(self.data_model)
         
-        # Update control widget checkboxes
-        self.control_widget.update_drive_enabled(
-            self.data_model.current_values['dyno']['drive_enabled'])
-        self.control_widget.update_brake_enabled(
-            self.data_model.current_values['dyno']['brake_enabled'])
+        # Update control widget checkboxes only if state differs
+        drive_enabled_data = self.data_model.current_values['dyno']['drive_enabled']
+        brake_enabled_data = self.data_model.current_values['dyno']['brake_enabled']
+        
+        # Only update if the checkbox state differs from the data to prevent overriding user input
+        if self.control_widget.drive_enabled_checkbox.isChecked() != drive_enabled_data:
+            self.control_widget.update_drive_enabled(drive_enabled_data)
+        if self.control_widget.brake_enabled_checkbox.isChecked() != brake_enabled_data:
+            self.control_widget.update_brake_enabled(brake_enabled_data)
             
     def export_chart_view(self):
         """Export current chart view to image file."""

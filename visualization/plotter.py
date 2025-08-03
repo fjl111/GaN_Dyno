@@ -24,7 +24,7 @@ class DynamometerPlotter:
         self.data_model = None
         
         # Interactive features settings
-        self.time_range_seconds = 60  # Show last 60 seconds by default
+        self.time_range_seconds = 120  # Show last 120 seconds by default (matches slider default)
         self.auto_scroll = True
         self.update_interval = 10  # 100 FPS hard-coded
         

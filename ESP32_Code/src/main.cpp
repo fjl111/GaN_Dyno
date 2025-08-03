@@ -83,10 +83,8 @@ unsigned long last_data_send = 0;
 unsigned long last_heartbeat = 0;
 
 // Set the frequency of the status checks
-// Request status from the motor controllers every 100ms
-const unsigned long STATUS_REQUEST_INTERVAL = 100;
-// Send data to the computer every 1000ms
-const unsigned long DATA_SEND_INTERVAL = 1000;
+// Send data to the computer every 100ms
+const unsigned long DATA_SEND_INTERVAL = 100 ;
 
 // Function prototypes
 void setupGPIO();
@@ -159,7 +157,8 @@ void loop() {
 
 void setupGPIO() {
     // Configure input pins for start/stop buttons and the power input
-    // Start and Stop buttons have external 10k pulldown resistors
+    // Start button: Normally Open with 10k pulldown resistor (reads HIGH when pressed)
+    // Stop button: Normally Closed with 10k pulldown resistor (reads LOW when pressed)
     pinMode(START_BTN_PIN, INPUT);
     pinMode(STOP_BTN_PIN, INPUT);
     // Power input has external 10k pullup resistor
@@ -529,7 +528,7 @@ void checkButtons() {
     if (current_time - last_button_check >= 50) {
         last_button_check = current_time;
         
-        // Check start button (active high - external pulldown)
+        // Check start button (normally open - goes HIGH when pressed)
         bool start_btn_state = digitalRead(START_BTN_PIN);
         if (start_btn_state && !start_btn_pressed) {
             // Start button pressed (goes HIGH)
@@ -542,14 +541,14 @@ void checkButtons() {
             start_btn_pressed = false;
         }
         
-        // Check stop button (active high - external pulldown)
+        // Check stop button (normally closed - goes LOW when pressed)
         bool stop_btn_state = digitalRead(STOP_BTN_PIN);
-        if (stop_btn_state && !stop_btn_pressed) {
-            // Stop button pressed (goes HIGH)
+        if (!stop_btn_state && !stop_btn_pressed) {
+            // Stop button pressed (goes LOW from normally HIGH state)
             stop_btn_pressed = true;
             emergencyStop();
             Serial.println("Hardware STOP button pressed - EMERGENCY STOP");
-        } else if (!stop_btn_state) {
+        } else if (stop_btn_state) {
             stop_btn_pressed = false;
         }
         
