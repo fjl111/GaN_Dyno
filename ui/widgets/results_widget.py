@@ -41,7 +41,7 @@ class ResultsWidget(QWidget):
         # Results tree
         self.results_tree = QTreeWidget()
         self.results_tree.setHeaderLabels(['Time', 'RPM', 'Load(A)', 'Power(W)', 
-                                          'Torque(Nm)', 'Efficiency(%)', 'Temp_FET', 'Temp_Motor'])
+                                          'Temp_FET', 'Temp_Motor'])
         tree_font = QFont("Arial", 12)
         self.results_tree.setFont(tree_font)
         main_layout.addWidget(self.results_tree)
@@ -53,8 +53,6 @@ class ResultsWidget(QWidget):
             f"{data_point['rpm']:.0f}",
             f"{data_point['load_current']:.2f}",
             f"{data_point['power']:.2f}",
-            f"{data_point['torque']:.3f}",
-            f"{data_point['efficiency']:.1f}",
             f"{data_point['temp_fet']:.1f}",
             f"{data_point['temp_motor']:.1f}"
         ])

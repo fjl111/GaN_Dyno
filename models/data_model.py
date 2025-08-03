@@ -34,8 +34,6 @@ class DynamometerData:
         
         # Dyno metrics
         self.mechanical_power = deque(maxlen=max_points)
-        self.efficiency = deque(maxlen=max_points)
-        self.torque_nm = deque(maxlen=max_points)
         
         # Current values for display
         self.current_values = {
@@ -50,7 +48,7 @@ class DynamometerData:
             'dyno': {
                 'target_rpm': 0, 'target_load': 0.0, 'drive_enabled': False,
                 'brake_enabled': False, 'emergency_stop': False, 
-                'mechanical_power': 0.0, 'efficiency': 0.0, 'torque_nm': 0.0
+                'mechanical_power': 0.0
             }
         }
         
@@ -77,11 +75,19 @@ class DynamometerData:
         
         # Add to time series data
         if 'timestamp' in data:
+            current_timestamp = data['timestamp'] / 1000.0
+            
+            # Detect ESP32 restart (timestamp reset to ~0)
+            if self.start_time is not None and current_timestamp < 5.0 and len(self.timestamps) > 10:
+                # ESP32 has restarted - clear all chart data and reset
+                self._clear_time_series_data()
+                self.start_time = None
+            
             # Convert timestamp to relative seconds
             if not self.start_time:
-                self.start_time = data['timestamp'] / 1000.0
+                self.start_time = current_timestamp
             
-            rel_time = (data['timestamp'] / 1000.0) - self.start_time
+            rel_time = current_timestamp - self.start_time
             self.timestamps.append(rel_time)
             
             # Add data points
@@ -98,8 +104,6 @@ class DynamometerData:
             self.brake_temp_motor.append(self.current_values['brake']['temp_motor'])
             
             self.mechanical_power.append(self.current_values['dyno']['mechanical_power'])
-            self.efficiency.append(self.current_values['dyno']['efficiency'])
-            self.torque_nm.append(self.current_values['dyno']['torque_nm'])
             
     def add_test_result(self):
         """Add current data to test results."""
@@ -110,8 +114,6 @@ class DynamometerData:
             'rpm': self.current_values['drive']['rpm'],
             'load_current': self.current_values['brake']['current'],
             'power': self.current_values['dyno']['mechanical_power'],
-            'torque': self.current_values['dyno']['torque_nm'],
-            'efficiency': self.current_values['dyno']['efficiency'],
             'temp_fet': max(self.current_values['drive']['temp_fet'], 
                           self.current_values['brake']['temp_fet']),
             'temp_motor': max(self.current_values['drive']['temp_motor'], 
@@ -125,6 +127,21 @@ class DynamometerData:
         """Clear all test data."""
         self.test_data = []
         
+    def _clear_time_series_data(self):
+        """Clear all time series data (used on ESP32 restart detection)."""
+        self.timestamps.clear()
+        self.drive_rpm.clear()
+        self.drive_current.clear()
+        self.drive_voltage.clear()
+        self.drive_temp_fet.clear()
+        self.drive_temp_motor.clear()
+        self.brake_rpm.clear()
+        self.brake_current.clear()
+        self.brake_voltage.clear()
+        self.brake_temp_fet.clear()
+        self.brake_temp_motor.clear()
+        self.mechanical_power.clear()
+        
     def get_plot_data(self):
         """Get all data needed for plotting."""
         return {
@@ -137,9 +154,7 @@ class DynamometerData:
             'brake_current': list(self.brake_current),
             'brake_temp_fet': list(self.brake_temp_fet),
             'brake_temp_motor': list(self.brake_temp_motor),
-            'mechanical_power': list(self.mechanical_power),
-            'efficiency': list(self.efficiency),
-            'torque_nm': list(self.torque_nm)
+            'mechanical_power': list(self.mechanical_power)
         }
         
     def has_data(self):

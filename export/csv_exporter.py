@@ -53,8 +53,8 @@ class CSVExporter:
             
     def _write_csv_file(self, filename, test_data):
         """Write test data to CSV file."""
-        fieldnames = ['time', 'rpm', 'load_current', 'power', 'torque', 
-                     'efficiency', 'temp_fet', 'temp_motor']
+        fieldnames = ['time', 'rpm', 'load_current', 'power', 
+                     'temp_fet', 'temp_motor']
         
         with open(filename, 'w', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -109,7 +109,7 @@ class CSVExporter:
         
         fieldnames = ['timestamp', 'drive_rpm', 'drive_current', 'drive_temp_fet', 
                      'drive_temp_motor', 'brake_rpm', 'brake_current', 'brake_temp_fet', 
-                     'brake_temp_motor', 'mechanical_power', 'efficiency', 'torque_nm']
+                     'brake_temp_motor', 'mechanical_power']
         
         with open(filename, 'w', newline='') as csvfile:
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -129,9 +129,7 @@ class CSVExporter:
                     'brake_current': plot_data['brake_current'][i],
                     'brake_temp_fet': plot_data['brake_temp_fet'][i],
                     'brake_temp_motor': plot_data['brake_temp_motor'][i],
-                    'mechanical_power': plot_data['mechanical_power'][i],
-                    'efficiency': plot_data['efficiency'][i],
-                    'torque_nm': plot_data['torque_nm'][i]
+                    'mechanical_power': plot_data['mechanical_power'][i]
                 }
                 writer.writerow(row)
                 

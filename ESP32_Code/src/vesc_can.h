@@ -22,16 +22,16 @@ typedef enum {
     CAN_PACKET_FILL_RX_BUFFER_LONG,
     CAN_PACKET_PROCESS_RX_BUFFER,
     CAN_PACKET_PROCESS_SHORT_BUFFER,
-    CAN_PACKET_STATUS,                    // 9
+    CAN_PACKET_STATUS_1,                    // 9
     CAN_PACKET_SET_CURRENT_REL,
     CAN_PACKET_SET_CURRENT_BRAKE_REL,
     CAN_PACKET_SET_CURRENT_HANDBRAKE,
     CAN_PACKET_SET_CURRENT_HANDBRAKE_REL,
-    CAN_PACKET_STATUS_1,                  // 14
-    CAN_PACKET_STATUS_2,                  // 15
-    CAN_PACKET_STATUS_3,                  // 16
-    CAN_PACKET_STATUS_4,                  // 17
-    CAN_PACKET_STATUS_5,                  // 18
+    CAN_PACKET_STATUS_2,                  // 14
+    CAN_PACKET_STATUS_3,                  // 15
+    CAN_PACKET_STATUS_4,                  // 16
+    CAN_PACKET_STATUS_5,                  // 17
+    CAN_PACKET_STATUS_6,                  // 18
     CAN_PACKET_PING,
     CAN_PACKET_PONG,
     CAN_PACKET_DETECT_APPLY_ALL_FOC,
@@ -42,7 +42,6 @@ typedef enum {
     CAN_PACKET_CONF_STORE_CURRENT_LIMITS_IN,
     CAN_PACKET_CONF_FOC_ERPMS,
     CAN_PACKET_CONF_STORE_FOC_ERPMS,
-    CAN_PACKET_STATUS_6,                  // 29
     CAN_PACKET_GET_VALUES_SELECTIVE,
     CAN_PACKET_GET_VALUES_SETUP_SELECTIVE,
     CAN_PACKET_EXT_FRAME

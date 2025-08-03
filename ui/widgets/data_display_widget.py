@@ -63,7 +63,7 @@ class DataDisplayWidget(QWidget):
         dyno_layout = QGridLayout(dyno_group)
         
         row = 0
-        for key in ['target_rpm', 'target_load', 'mechanical_power', 'efficiency', 'torque_nm']:
+        for key in ['target_rpm', 'target_load', 'mechanical_power']:
             label_text = key.replace('_', ' ').title() + ":"
             dyno_layout.addWidget(QLabel(label_text), row, 0)
             
@@ -128,7 +128,7 @@ class DataDisplayWidget(QWidget):
         """Format value based on key type."""
         if key in ['current', 'voltage', 'temp_fet', 'temp_motor', 'duty_cycle']:
             return f"{value:.2f}"
-        elif key in ['target_load', 'mechanical_power', 'efficiency', 'torque_nm']:
+        elif key in ['target_load', 'mechanical_power']:
             return f"{value:.3f}"
         elif key == 'data_age':
             return f"{value} ms"

@@ -17,7 +17,7 @@ class DynamometerPlotter:
         self.data_model = None
         
         # Create matplotlib figure
-        self.fig, self.axes = plt.subplots(2, 3, figsize=(18, 10))
+        self.fig, self.axes = plt.subplots(2, 2, figsize=(12, 10))
         self.fig.suptitle('Dynamometer Real-time Monitoring', fontsize=12, fontweight='bold')
         
         # Adjust spacing between subplots
@@ -25,14 +25,9 @@ class DynamometerPlotter:
         
         # Configure subplots
         self.ax_rpm = self.axes[0, 0]
-        self.ax_power_torque = self.axes[0, 1]
-        self.ax_temp = self.axes[0, 2]
-        self.ax_current = self.axes[1, 0]
-        self.ax_efficiency = self.axes[1, 1]
-        self.ax_power_curve = self.axes[1, 2]
-        
-        # Create second y-axis for torque
-        self.ax_torque = self.ax_power_torque.twinx()
+        self.ax_power = self.axes[0, 1]
+        self.ax_temp = self.axes[1, 0]
+        self.ax_current = self.axes[1, 1]
         
         # Setup plot formatting
         self._setup_plot_formatting()
@@ -64,15 +59,11 @@ class DynamometerPlotter:
         self.ax_rpm.grid(True, alpha=0.3, linestyle='--')
         self.ax_rpm.tick_params(axis='both', which='major', labelsize=tick_fontsize)
         
-        # Power & Torque plot
-        self.ax_power_torque.set_title('Power & Torque', fontsize=title_fontsize, fontweight='bold')
-        self.ax_power_torque.set_ylabel('Power (W)', color='red', fontsize=label_fontsize)
-        self.ax_power_torque.tick_params(axis='y', labelcolor='red', labelsize=tick_fontsize)
-        self.ax_power_torque.tick_params(axis='x', labelsize=tick_fontsize)
-        self.ax_power_torque.grid(True, alpha=0.3, linestyle='--')
-        
-        self.ax_torque.set_ylabel('Torque (Nm)', color='blue', fontsize=label_fontsize)
-        self.ax_torque.tick_params(axis='y', labelcolor='blue', labelsize=tick_fontsize)
+        # Power plot
+        self.ax_power.set_title('Mechanical Power', fontsize=title_fontsize, fontweight='bold')
+        self.ax_power.set_ylabel('Power (W)', fontsize=label_fontsize)
+        self.ax_power.grid(True, alpha=0.3, linestyle='--')
+        self.ax_power.tick_params(axis='both', which='major', labelsize=tick_fontsize)
         
         # Temperature plot
         self.ax_temp.set_title('Temperatures', fontsize=title_fontsize, fontweight='bold')
@@ -86,18 +77,6 @@ class DynamometerPlotter:
         self.ax_current.grid(True, alpha=0.3, linestyle='--')
         self.ax_current.tick_params(axis='both', which='major', labelsize=tick_fontsize)
         
-        # Efficiency plot
-        self.ax_efficiency.set_title('Efficiency', fontsize=title_fontsize, fontweight='bold')
-        self.ax_efficiency.set_ylabel('Efficiency (%)', fontsize=label_fontsize)
-        self.ax_efficiency.grid(True, alpha=0.3, linestyle='--')
-        self.ax_efficiency.tick_params(axis='both', which='major', labelsize=tick_fontsize)
-        
-        # Power curve plot
-        self.ax_power_curve.set_title('Power vs RPM Curve', fontsize=title_fontsize, fontweight='bold')
-        self.ax_power_curve.set_xlabel('RPM', fontsize=label_fontsize)
-        self.ax_power_curve.set_ylabel('Power (W)', fontsize=label_fontsize)
-        self.ax_power_curve.grid(True, alpha=0.3, linestyle='--')
-        self.ax_power_curve.tick_params(axis='both', which='major', labelsize=tick_fontsize)
         
     def update_plots(self, frame):
         """Update all plots with current data."""
@@ -110,12 +89,9 @@ class DynamometerPlotter:
         
         # Clear all plots
         self.ax_rpm.clear()
-        self.ax_power_torque.clear()
-        self.ax_torque.clear()
+        self.ax_power.clear()
         self.ax_temp.clear()
         self.ax_current.clear()
-        self.ax_efficiency.clear()
-        self.ax_power_curve.clear()
         
         # Font sizes for consistency
         title_fontsize = 9
@@ -133,19 +109,13 @@ class DynamometerPlotter:
         self.ax_rpm.grid(True, alpha=0.3, linestyle='--')
         self.ax_rpm.tick_params(axis='both', which='major', labelsize=tick_fontsize)
         
-        # Plot Power and Torque
-        self.ax_power_torque.plot(times, plot_data['mechanical_power'], 'r-', linewidth=2.5, label='Power')
-        self.ax_power_torque.set_ylabel('Power (W)', color='red', fontsize=label_fontsize)
-        self.ax_power_torque.set_xlabel('Time (s)', fontsize=label_fontsize)
-        self.ax_power_torque.tick_params(axis='y', labelcolor='red', labelsize=tick_fontsize)
-        self.ax_power_torque.tick_params(axis='x', labelsize=tick_fontsize)
-        self.ax_power_torque.grid(True, alpha=0.3, linestyle='--')
-        
-        self.ax_torque.plot(times, plot_data['torque_nm'], 'b-', linewidth=2.5, label='Torque')
-        self.ax_torque.set_ylabel('Torque (Nm)', color='blue', fontsize=label_fontsize)
-        self.ax_torque.tick_params(axis='y', labelcolor='blue', labelsize=tick_fontsize)
-        
-        self.ax_power_torque.set_title('Power & Torque', fontsize=title_fontsize, fontweight='bold')
+        # Plot Power
+        self.ax_power.plot(times, plot_data['mechanical_power'], 'r-', linewidth=2.5, label='Power')
+        self.ax_power.set_title('Mechanical Power', fontsize=title_fontsize, fontweight='bold')
+        self.ax_power.set_ylabel('Power (W)', fontsize=label_fontsize)
+        self.ax_power.set_xlabel('Time (s)', fontsize=label_fontsize)
+        self.ax_power.grid(True, alpha=0.3, linestyle='--')
+        self.ax_power.tick_params(axis='both', which='major', labelsize=tick_fontsize)
         
         # Plot Temperatures
         self.ax_temp.plot(times, plot_data['drive_temp_fet'], 'r-', linewidth=2.5, label='Drive FET')
@@ -169,26 +139,9 @@ class DynamometerPlotter:
         self.ax_current.grid(True, alpha=0.3, linestyle='--')
         self.ax_current.tick_params(axis='both', which='major', labelsize=tick_fontsize)
         
-        # Plot Efficiency
-        self.ax_efficiency.plot(times, plot_data['efficiency'], 'cyan', linewidth=2.5)
-        self.ax_efficiency.set_title('Efficiency', fontsize=title_fontsize, fontweight='bold')
-        self.ax_efficiency.set_ylabel('Efficiency (%)', fontsize=label_fontsize)
-        self.ax_efficiency.set_xlabel('Time (s)', fontsize=label_fontsize)
-        self.ax_efficiency.grid(True, alpha=0.3, linestyle='--')
-        self.ax_efficiency.tick_params(axis='both', which='major', labelsize=tick_fontsize)
-        
-        # Plot Power vs RPM curve (scatter plot)
-        if len(plot_data['drive_rpm']) > 1:
-            self.ax_power_curve.scatter(plot_data['drive_rpm'], plot_data['mechanical_power'], 
-                                      c=times, cmap='viridis', alpha=0.7, s=30)
-            self.ax_power_curve.set_title('Power vs RPM Curve', fontsize=title_fontsize, fontweight='bold')
-            self.ax_power_curve.set_xlabel('RPM', fontsize=label_fontsize)
-            self.ax_power_curve.set_ylabel('Power (W)', fontsize=label_fontsize)
-            self.ax_power_curve.grid(True, alpha=0.3, linestyle='--')
-            self.ax_power_curve.tick_params(axis='both', which='major', labelsize=tick_fontsize)
             
         # Apply consistent spacing
-        plt.subplots_adjust(left=0.08, bottom=0.08, right=0.95, top=0.92, wspace=0.3, hspace=0.4)
+        plt.subplots_adjust(left=0.08, bottom=0.08, right=0.95, top=0.92, wspace=0.25, hspace=0.4)
         
         # Refresh canvas
         self.canvas.draw()
