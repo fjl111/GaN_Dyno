@@ -5,13 +5,12 @@ Handles current values and data storage for plotting.
 
 from collections import deque
 from datetime import datetime
-import json
 import os
 import sys
 
 # Add the storage module to the path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from storage.database import DataStorage
+from Dyno_UI.storage.database import DataStorage
 
 
 class DynamometerData:

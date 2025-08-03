@@ -11,9 +11,9 @@ import matplotlib.pyplot as plt
 # Add parent directory to path to import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from communication.serial_handler import SerialHandler, CommandInterface
-from testing.response_time_test import StepResponseTest
-from models.data_model import DynamometerData
+from Dyno_UI.communication.serial_handler import SerialHandler, CommandInterface
+from Dyno_UI.testing.response_time_test import StepResponseTest
+from Dyno_UI.models.data_model import DynamometerData
 
 
 def run_step_response_test_example():

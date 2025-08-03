@@ -10,8 +10,8 @@ import time
 # Add parent directory to path to import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from communication.serial_handler import SerialHandler, CommandInterface
-from testing.response_time_test import PingTest
+from Dyno_UI.communication.serial_handler import SerialHandler, CommandInterface
+from Dyno_UI.testing.response_time_test import PingTest
 
 
 def run_ping_test_example():

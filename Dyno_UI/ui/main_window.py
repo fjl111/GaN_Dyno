@@ -3,27 +3,25 @@ Main window UI.
 Coordinates all components and handles the main application logic.
 """
 
-import sys
-import json
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, 
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
                              QMessageBox, QApplication)
-from PyQt5.QtCore import pyqtSlot, Qt, QTimer
+from PyQt5.QtCore import pyqtSlot, QTimer
 from PyQt5.QtGui import QFont, QPalette, QColor
 
 # Import other code functions
-from models.data_model import DynamometerData
-from communication.serial_handler import SerialHandler, CommandInterface, DataParser
-from testing.test_controller import TestController
-from visualization.plotter import DynamometerPlotter
-from export.csv_exporter import CSVExporter
-from ui.widgets.connection_widget import ConnectionWidget
-from ui.widgets.control_widget import ControlWidget
-from ui.widgets.test_widget import TestWidget
-from ui.widgets.data_display_widget import DataDisplayWidget
-from ui.widgets.console_widget import ConsoleWidget
-from ui.widgets.results_widget import ResultsWidget
-from ui.widgets.chart_controls_widget import ChartControlsWidget
-from ui.widgets.response_time_widget import ResponseTimeWidget
+from Dyno_UI.models.data_model import DynamometerData
+from Dyno_UI.communication.serial_handler import SerialHandler, CommandInterface, DataParser
+from Dyno_UI.testing.test_controller import TestController
+from Dyno_UI.visualization.plotter import DynamometerPlotter
+from Dyno_UI.export.csv_exporter import CSVExporter
+from Dyno_UI.ui.widgets.connection_widget import ConnectionWidget
+from Dyno_UI.ui.widgets.control_widget import ControlWidget
+from Dyno_UI.ui.widgets.test_widget import TestWidget
+from Dyno_UI.ui.widgets.data_display_widget import DataDisplayWidget
+from Dyno_UI.ui.widgets.console_widget import ConsoleWidget
+from Dyno_UI.ui.widgets.results_widget import ResultsWidget
+from Dyno_UI.ui.widgets.chart_controls_widget import ChartControlsWidget
+from Dyno_UI.ui.widgets.response_time_widget import ResponseTimeWidget
 
 
 class DynamometerMainWindow(QMainWindow):
@@ -429,8 +427,7 @@ class DynamometerMainWindow(QMainWindow):
     def export_chart_view(self):
         """Export current chart view to image file."""
         from PyQt5.QtWidgets import QFileDialog
-        import matplotlib.pyplot as plt
-        
+
         # Get save file path
         file_path, _ = QFileDialog.getSaveFileName(
             self, "Export Chart View", "chart_view.png",

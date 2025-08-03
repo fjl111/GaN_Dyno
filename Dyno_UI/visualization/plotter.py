@@ -28,18 +28,20 @@ class DynamometerPlotter:
         self.auto_scroll = True
         self.update_interval = 10  # 100 FPS hard-coded
         
-        # Create matplotlib figure
-        self.fig, self.axes = plt.subplots(2, 2, figsize=(12, 10))
+        # Create matplotlib figure with 2x3 grid for 6 subplots
+        self.fig, self.axes = plt.subplots(2, 3, figsize=(15, 10))
         self.fig.suptitle('Dynamometer Real-time Monitoring', fontsize=12, fontweight='bold')
         
         # Adjust spacing between subplots
-        plt.subplots_adjust(left=0.08, bottom=0.12, right=0.95, top=0.92, wspace=0.3, hspace=0.4)
+        plt.subplots_adjust(left=0.06, bottom=0.08, right=0.96, top=0.92, wspace=0.25, hspace=0.35)
         
         # Configure subplots
         self.ax_rpm = self.axes[0, 0]
         self.ax_power = self.axes[0, 1]
         self.ax_temp = self.axes[1, 0]
         self.ax_current = self.axes[1, 1]
+        self.ax_current_vs_fet = self.axes[0, 2]  # New graph: Current vs FET Temperature
+        self.ax_spare = self.axes[1, 2]  # Spare subplot for future use
         
         # Setup plot formatting and initialize line objects
         self._setup_plot_formatting()
@@ -99,6 +101,17 @@ class DynamometerPlotter:
         self.ax_current.grid(True, alpha=0.3, linestyle='--')
         self.ax_current.tick_params(axis='both', which='major', labelsize=tick_fontsize)
         
+        # Current vs FET Temperature plot (scatter plot)
+        self.ax_current_vs_fet.set_title('Current vs FET Temperature', fontsize=title_fontsize, fontweight='bold')
+        self.ax_current_vs_fet.set_xlabel('FET Temperature (°C)', fontsize=label_fontsize)
+        self.ax_current_vs_fet.set_ylabel('Current (A)', fontsize=label_fontsize)
+        self.ax_current_vs_fet.grid(True, alpha=0.3, linestyle='--')
+        self.ax_current_vs_fet.tick_params(axis='both', which='major', labelsize=tick_fontsize)
+        
+        # Spare plot (hide for now)
+        self.ax_spare.set_title('Reserved', fontsize=title_fontsize, fontweight='bold')
+        self.ax_spare.set_visible(False)
+        
     def _initialize_line_objects(self):
         """Initialize line objects for efficient updates."""
         # Initialize empty line objects for each data series
@@ -119,6 +132,11 @@ class DynamometerPlotter:
         self.current_drive_line, = self.ax_current.plot([], [], 'g-', linewidth=2.5, label='Drive Current')
         self.current_brake_line, = self.ax_current.plot([], [], 'm-', linewidth=2.5, label='Brake Current')
         self.ax_current.legend(fontsize=7)
+        
+        # Current vs FET Temperature scatter plots
+        self.drive_current_vs_fet_scatter = self.ax_current_vs_fet.scatter([], [], c='blue', alpha=0.6, s=30, label='Drive Motor')
+        self.brake_current_vs_fet_scatter = self.ax_current_vs_fet.scatter([], [], c='red', alpha=0.6, s=30, label='Brake Motor')
+        self.ax_current_vs_fet.legend(fontsize=7)
         
         # Store all line objects for easy access
         self.all_lines = [
@@ -223,6 +241,9 @@ class DynamometerPlotter:
         self.current_drive_line.set_data(times, filtered_data['drive_current'])
         self.current_brake_line.set_data(times, filtered_data['brake_current'])
         
+        # Update Current vs FET Temperature scatter plots
+        self._update_current_vs_fet_scatter(filtered_data)
+        
         # Auto-scale axes if in auto-scroll mode
         if self.auto_scroll and len(times) > 0:
             # Update x-axis limits
@@ -240,6 +261,40 @@ class DynamometerPlotter:
             
         # Refresh canvas
         self.canvas.draw_idle()
+    
+    def _update_current_vs_fet_scatter(self, data):
+        """Update the current vs FET temperature scatter plots."""
+        # Clear previous scatter points
+        self.ax_current_vs_fet.clear()
+        
+        # Recreate the plot formatting
+        title_fontsize = 9
+        label_fontsize = 8
+        tick_fontsize = 7
+        
+        self.ax_current_vs_fet.set_title('Current vs FET Temperature', fontsize=title_fontsize, fontweight='bold')
+        self.ax_current_vs_fet.set_xlabel('FET Temperature (°C)', fontsize=label_fontsize)
+        self.ax_current_vs_fet.set_ylabel('Current (A)', fontsize=label_fontsize)
+        self.ax_current_vs_fet.grid(True, alpha=0.3, linestyle='--')
+        self.ax_current_vs_fet.tick_params(axis='both', which='major', labelsize=tick_fontsize)
+        
+        # Plot drive motor data (current vs FET temperature)
+        if len(data['drive_current']) > 0 and len(data['drive_temp_fet']) > 0:
+            self.ax_current_vs_fet.scatter(data['drive_temp_fet'], data['drive_current'], 
+                                         c='blue', alpha=0.6, s=30, label='Drive Motor')
+        
+        # Plot brake motor data (current vs FET temperature)
+        if len(data['brake_current']) > 0 and len(data['brake_temp_fet']) > 0:
+            self.ax_current_vs_fet.scatter(data['brake_temp_fet'], data['brake_current'], 
+                                         c='red', alpha=0.6, s=30, label='Brake Motor')
+        
+        # Add legend
+        self.ax_current_vs_fet.legend(fontsize=7)
+        
+        # Auto-scale axes
+        if self.auto_scroll:
+            self.ax_current_vs_fet.relim()
+            self.ax_current_vs_fet.autoscale()
             
     def _update_y_limits(self, data):
         """Update y-axis limits with appropriate padding."""
@@ -302,7 +357,7 @@ class DynamometerPlotter:
         
     def reset_zoom(self):
         """Reset all axes to auto-scale."""
-        for ax in [self.ax_rpm, self.ax_power, self.ax_temp, self.ax_current]:
+        for ax in [self.ax_rpm, self.ax_power, self.ax_temp, self.ax_current, self.ax_current_vs_fet]:
             ax.relim()
             ax.autoscale()
         self.canvas.draw()

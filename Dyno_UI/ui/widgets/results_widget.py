@@ -3,8 +3,8 @@ Test results widget for dynamometer interface.
 Displays test results in a tree view with export functionality.
 """
 
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                             QTreeWidget, QTreeWidgetItem, QTabWidget, QLabel, QSizePolicy)
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
+                             QTreeWidget, QTreeWidgetItem, QTabWidget, QLabel)
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import pyqtSignal
 import sys
@@ -12,7 +12,7 @@ import os
 
 # Add visualization module to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
-from visualization.plot3d_widget import Plot3DWidget
+from Dyno_UI.visualization.plot3d_widget import Plot3DWidget
 
 
 class ResultsWidget(QWidget):
