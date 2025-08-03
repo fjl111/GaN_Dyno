@@ -13,12 +13,13 @@ class TestThread(QThread):
     status_update = pyqtSignal(str)
     test_complete = pyqtSignal()
     
-    def __init__(self, start_rpm, end_rpm, steps, command_interface):
+    def __init__(self, start_rpm, end_rpm, steps, command_interface, step_duration=3):
         super().__init__()
         self.start_rpm = start_rpm
         self.end_rpm = end_rpm
         self.steps = steps
         self.command_interface = command_interface
+        self.step_duration = step_duration  # Duration in seconds for each step
         self.running = False
         
     def run(self):
@@ -30,13 +31,13 @@ class TestThread(QThread):
             if not self.running:
                 break
                 
-            self.status_update.emit(f"Step {i+1}/{self.steps}: {rpm:.0f} RPM")
+            self.status_update.emit(f"Step {i+1}/{self.steps}: {rpm:.0f} RPM ({self.step_duration}s)")
             
             # Set speed
             self.command_interface.set_drive_speed(int(rpm))
             
-            # Wait for stabilization
-            self.msleep(3000)  # Sleep for 3 seconds
+            # Wait for stabilization and measurement
+            self.msleep(self.step_duration * 1000)  # Convert seconds to milliseconds
             
         self.test_complete.emit()
         
@@ -63,7 +64,7 @@ class TestController:
         self.status_callback = status_callback
         self.complete_callback = complete_callback
         
-    def start_speed_sweep(self, start_rpm, end_rpm, steps):
+    def start_speed_sweep(self, start_rpm, end_rpm, steps, step_duration=3):
         """Start an automated speed sweep test."""
         if self.test_running:
             return False, "Test already running"
@@ -76,11 +77,17 @@ class TestController:
             if start_rpm >= end_rpm:
                 return False, "Start RPM must be less than end RPM"
                 
+            if step_duration <= 0:
+                return False, "Step duration must be positive"
+                
+            if step_duration > 300:  # Safety limit of 5 minutes per step
+                return False, "Step duration exceeds safety limit (300 seconds)"
+                
             # Clear previous test data
             self.data_model.clear_test_data()
             
             # Create and start test thread
-            self.test_thread = TestThread(start_rpm, end_rpm, steps, self.command_interface)
+            self.test_thread = TestThread(start_rpm, end_rpm, steps, self.command_interface, step_duration)
             
             if self.status_callback:
                 self.test_thread.status_update.connect(self.status_callback)
@@ -90,7 +97,7 @@ class TestController:
             self.test_thread.start()
             self.test_running = True
             
-            return True, f"Starting speed sweep: {start_rpm} to {end_rpm} RPM in {steps} steps"
+            return True, f"Starting speed sweep: {start_rpm} to {end_rpm} RPM in {steps} steps ({step_duration}s each)"
             
         except Exception as e:
             return False, f"Failed to start test: {str(e)}"
@@ -155,7 +162,7 @@ class TestValidator:
     """Validates test parameters and safety conditions."""
     
     @staticmethod
-    def validate_speed_sweep(start_rpm, end_rpm, steps):
+    def validate_speed_sweep(start_rpm, end_rpm, steps, step_duration=3):
         """Validate speed sweep parameters."""
         errors = []
         
@@ -169,6 +176,10 @@ class TestValidator:
             errors.append("Start RPM must be less than end RPM")
         if end_rpm > 10000:  # Safety limit
             errors.append("End RPM exceeds safety limit (10000 RPM)")
+        if step_duration <= 0:
+            errors.append("Step duration must be positive")
+        if step_duration > 300:
+            errors.append("Step duration exceeds safety limit (300 seconds)")
             
         return len(errors) == 0, errors
         

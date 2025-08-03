@@ -6,14 +6,24 @@ Handles current values and data storage for plotting.
 from collections import deque
 from datetime import datetime
 import json
+import os
+import sys
+
+# Add the storage module to the path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from storage.database import DataStorage
 
 
 class DynamometerData:
     """Manages all data for the dynamometer application."""
     
-    def __init__(self, max_points=1000):
+    def __init__(self, max_points=36000):
         self.max_points = max_points
         self.start_time = None
+        
+        # Initialize database storage
+        self.db_storage = DataStorage()
+        self.session_start_time = None
         
         # Time series data for plotting
         self.timestamps = deque(maxlen=max_points)
@@ -81,11 +91,15 @@ class DynamometerData:
             if self.start_time is not None and current_timestamp < 5.0 and len(self.timestamps) > 10:
                 # ESP32 has restarted - clear all chart data and reset
                 self._clear_time_series_data()
+                if self.session_start_time:
+                    self.db_storage.clear_session_data(self.session_start_time)
                 self.start_time = None
+                self.session_start_time = None
             
             # Convert timestamp to relative seconds
             if not self.start_time:
                 self.start_time = current_timestamp
+                self.session_start_time = current_timestamp
             
             rel_time = current_timestamp - self.start_time
             self.timestamps.append(rel_time)
@@ -104,6 +118,17 @@ class DynamometerData:
             self.brake_temp_motor.append(self.current_values['brake']['temp_motor'])
             
             self.mechanical_power.append(self.current_values['dyno']['mechanical_power'])
+            
+            # Store data point in database
+            if self.session_start_time:
+                self.db_storage.store_data_point(
+                    timestamp=current_timestamp,
+                    relative_time=rel_time,
+                    drive_data=self.current_values['drive'],
+                    brake_data=self.current_values['brake'],
+                    dyno_data=self.current_values['dyno'],
+                    session_start=self.session_start_time
+                )
             
     def add_test_result(self):
         """Add current data to test results."""
@@ -142,21 +167,43 @@ class DynamometerData:
         self.brake_temp_motor.clear()
         self.mechanical_power.clear()
         
-    def get_plot_data(self):
-        """Get all data needed for plotting."""
-        return {
-            'timestamps': list(self.timestamps),
-            'drive_rpm': list(self.drive_rpm),
-            'drive_current': list(self.drive_current),
-            'drive_temp_fet': list(self.drive_temp_fet),
-            'drive_temp_motor': list(self.drive_temp_motor),
-            'brake_rpm': list(self.brake_rpm),
-            'brake_current': list(self.brake_current),
-            'brake_temp_fet': list(self.brake_temp_fet),
-            'brake_temp_motor': list(self.brake_temp_motor),
-            'mechanical_power': list(self.mechanical_power)
-        }
+    def get_plot_data(self, time_range_seconds=None):
+        """
+        Get data needed for plotting.
+        
+        Args:
+            time_range_seconds: If specified, get data for this time range from database.
+                               If None, return current in-memory data.
+        """
+        if time_range_seconds is None or not self.session_start_time:
+            # Return current in-memory data
+            return {
+                'timestamps': list(self.timestamps),
+                'drive_rpm': list(self.drive_rpm),
+                'drive_current': list(self.drive_current),
+                'drive_temp_fet': list(self.drive_temp_fet),
+                'drive_temp_motor': list(self.drive_temp_motor),
+                'brake_rpm': list(self.brake_rpm),
+                'brake_current': list(self.brake_current),
+                'brake_temp_fet': list(self.brake_temp_fet),
+                'brake_temp_motor': list(self.brake_temp_motor),
+                'mechanical_power': list(self.mechanical_power)
+            }
+        else:
+            # Get data from database for specified time range
+            return self.db_storage.get_data_for_timerange(
+                session_start=self.session_start_time,
+                time_range_seconds=time_range_seconds
+            )
         
     def has_data(self):
         """Check if there's any data to plot."""
         return len(self.timestamps) > 0
+    
+    def get_database_stats(self):
+        """Get database storage statistics."""
+        return self.db_storage.get_database_stats()
+    
+    def cleanup_old_data(self, days_to_keep=7):
+        """Clean up old data from database."""
+        self.db_storage.cleanup_old_data(days_to_keep)

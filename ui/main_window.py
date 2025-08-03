@@ -163,6 +163,11 @@ class DynamometerMainWindow(QMainWindow):
         self.update_timer.timeout.connect(self.update_gui)
         self.update_timer.start(100)  # Update every 100ms
         
+        # Database cleanup timer (once per hour)
+        self.cleanup_timer = QTimer()
+        self.cleanup_timer.timeout.connect(self.cleanup_old_data)
+        self.cleanup_timer.start(3600000)  # 1 hour in milliseconds
+        
     def connect_to_device(self, port):
         """Connect to ESP32 device."""
         try:
@@ -235,9 +240,9 @@ class DynamometerMainWindow(QMainWindow):
         else:
             QMessageBox.warning(self, "Warning", "Failed to send enable command")
             
-    def start_speed_sweep(self, start_rpm, end_rpm, steps):
+    def start_speed_sweep(self, start_rpm, end_rpm, steps, duration):
         """Start automated speed sweep test."""
-        success, message = self.test_controller.start_speed_sweep(start_rpm, end_rpm, steps)
+        success, message = self.test_controller.start_speed_sweep(start_rpm, end_rpm, steps, duration)
         
         if success:
             self.test_widget.set_test_running(True)
@@ -325,6 +330,13 @@ class DynamometerMainWindow(QMainWindow):
             self.control_widget.update_drive_enabled(drive_enabled_data)
         if self.control_widget.brake_enabled_checkbox.isChecked() != brake_enabled_data:
             self.control_widget.update_brake_enabled(brake_enabled_data)
+    
+    def cleanup_old_data(self):
+        """Clean up old database data to prevent excessive storage growth."""
+        try:
+            self.data_model.cleanup_old_data(days_to_keep=7)  # Keep 7 days of data
+        except Exception as e:
+            self.console_widget.log_error(f"Database cleanup failed: {str(e)}")
             
     def export_chart_view(self):
         """Export current chart view to image file."""

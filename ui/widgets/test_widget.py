@@ -11,7 +11,7 @@ from PyQt5.QtCore import pyqtSignal
 class TestWidget(QWidget):
     """Widget for test automation controls."""
     
-    speed_sweep_requested = pyqtSignal(int, int, int)  # start_rpm, end_rpm, steps
+    speed_sweep_requested = pyqtSignal(int, int, int, int)  # start_rpm, end_rpm, steps, duration
     test_stop_requested = pyqtSignal()
     
     def __init__(self, parent=None):
@@ -26,7 +26,7 @@ class TestWidget(QWidget):
         
         # Create group box with reduced height
         group_box = QGroupBox("Automated Testing")
-        group_box.setMaximumHeight(80)
+        group_box.setMaximumHeight(85)  # Slightly taller to accommodate duration field
         main_layout.addWidget(group_box)
         
         # Group box layout - horizontal for compactness
@@ -73,6 +73,17 @@ class TestWidget(QWidget):
         group_layout.addWidget(self.sweep_steps_input)
         group_layout.addSpacing(25)
         
+        # Duration label and input - tightly coupled
+        duration_label = QLabel("Duration:")
+        duration_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        group_layout.addWidget(duration_label)
+        
+        self.step_duration_input = QLineEdit("3")
+        self.step_duration_input.setFixedWidth(50)
+        self.step_duration_input.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        group_layout.addWidget(self.step_duration_input)
+        group_layout.addSpacing(25)
+        
         self.start_sweep_button = QPushButton("Start")
         self.start_sweep_button.setMaximumWidth(60)
         self.start_sweep_button.clicked.connect(self._on_start_sweep_clicked)
@@ -101,7 +112,8 @@ class TestWidget(QWidget):
             start_rpm = int(self.sweep_start_input.text())
             end_rpm = int(self.sweep_end_input.text())
             steps = int(self.sweep_steps_input.text())
-            self.speed_sweep_requested.emit(start_rpm, end_rpm, steps)
+            duration = int(self.step_duration_input.text())
+            self.speed_sweep_requested.emit(start_rpm, end_rpm, steps, duration)
         except ValueError:
             # Handle invalid input - could emit error signal
             pass
@@ -119,6 +131,7 @@ class TestWidget(QWidget):
         self.sweep_start_input.setEnabled(not running)
         self.sweep_end_input.setEnabled(not running)
         self.sweep_steps_input.setEnabled(not running)
+        self.step_duration_input.setEnabled(not running)
         
     def get_sweep_parameters(self):
         """Get current sweep parameters."""
@@ -126,21 +139,24 @@ class TestWidget(QWidget):
             return {
                 'start_rpm': int(self.sweep_start_input.text()),
                 'end_rpm': int(self.sweep_end_input.text()),
-                'steps': int(self.sweep_steps_input.text())
+                'steps': int(self.sweep_steps_input.text()),
+                'duration': int(self.step_duration_input.text())
             }
         except ValueError:
             return None
             
-    def set_sweep_parameters(self, start_rpm, end_rpm, steps):
+    def set_sweep_parameters(self, start_rpm, end_rpm, steps, duration=3):
         """Set sweep parameters."""
         self.sweep_start_input.setText(str(start_rpm))
         self.sweep_end_input.setText(str(end_rpm))
         self.sweep_steps_input.setText(str(steps))
+        self.step_duration_input.setText(str(duration))
         
     def set_enabled(self, enabled):
         """Enable/disable test controls."""
         self.sweep_start_input.setEnabled(enabled)
         self.sweep_end_input.setEnabled(enabled)
         self.sweep_steps_input.setEnabled(enabled)
+        self.step_duration_input.setEnabled(enabled)
         self.start_sweep_button.setEnabled(enabled)
         # Note: stop button state depends on test running status

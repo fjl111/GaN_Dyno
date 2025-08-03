@@ -103,9 +103,13 @@ class CSVExporter:
                 QMessageBox.critical(self.parent_widget, "Error", error_msg)
             return False, error_msg
             
-    def _write_realtime_csv_file(self, filename, data_model):
+    def _write_realtime_csv_file(self, filename, data_model, time_range_seconds=None):
         """Write real-time data to CSV file."""
-        plot_data = data_model.get_plot_data()
+        # Use database-backed data retrieval for specific time ranges
+        if time_range_seconds is not None:
+            plot_data = data_model.get_plot_data(time_range_seconds=time_range_seconds)
+        else:
+            plot_data = data_model.get_plot_data()
         
         fieldnames = ['timestamp', 'drive_rpm', 'drive_current', 'drive_temp_fet', 
                      'drive_temp_motor', 'brake_rpm', 'brake_current', 'brake_temp_fet', 
@@ -186,3 +190,66 @@ class CSVExporter:
             # Write dyno values
             for key, value in current_values['dyno'].items():
                 writer.writerow(['Dyno', key.replace('_', ' ').title(), value])
+                
+    def export_time_range_data(self, data_model, time_range_seconds, default_filename=None):
+        """Export data for a specific time range from database."""
+        if not data_model.has_data():
+            if self.parent_widget:
+                QMessageBox.warning(self.parent_widget, "Warning", "No data to export")
+            return False, "No data to export"
+            
+        # Generate default filename if not provided
+        if not default_filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            if time_range_seconds == 0:
+                range_desc = "all_time"
+            elif time_range_seconds < 60:
+                range_desc = f"{time_range_seconds}sec"
+            elif time_range_seconds < 3600:
+                range_desc = f"{time_range_seconds//60}min"
+            else:
+                range_desc = f"{time_range_seconds//3600}hr"
+            default_filename = f"dyno_data_{range_desc}_{timestamp}.csv"
+            
+        # Get save location from user
+        filename, _ = QFileDialog.getSaveFileName(
+            self.parent_widget, 
+            f"Export {range_desc} Data",
+            default_filename,
+            "CSV files (*.csv);;All files (*.*)"
+        )
+        
+        if not filename:
+            return False, "Export cancelled"
+            
+        try:
+            self._write_realtime_csv_file(filename, data_model, time_range_seconds)
+            
+            if self.parent_widget:
+                QMessageBox.information(self.parent_widget, "Success", 
+                                      f"Time range data exported to {filename}")
+            return True, f"Time range data exported to {filename}"
+            
+        except Exception as e:
+            error_msg = f"Failed to export: {str(e)}"
+            if self.parent_widget:
+                QMessageBox.critical(self.parent_widget, "Error", error_msg)
+            return False, error_msg
+    
+    def export_full_session_data(self, data_model, default_filename=None):
+        """Export complete session data from database."""
+        return self.export_time_range_data(data_model, 0, default_filename)  # 0 = all data
+    
+    def get_export_options(self):
+        """Get available export time range options."""
+        return {
+            'Last 10 seconds': 10,
+            'Last 30 seconds': 30,
+            'Last 1 minute': 60,
+            'Last 2 minutes': 120,
+            'Last 5 minutes': 300,
+            'Last 10 minutes': 600,
+            'Last 30 minutes': 1800,
+            'Last 1 hour': 3600,
+            'All session data': 0
+        }

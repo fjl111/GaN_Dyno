@@ -171,12 +171,20 @@ class DynamometerPlotter:
         if not self.data_model or not self.data_model.has_data():
             return
             
-        # Get plot data
-        plot_data = self.data_model.get_plot_data()
+        # Get plot data - use database for longer time ranges
+        use_database = self.time_range_seconds > 0 and self.time_range_seconds > 100  # Use DB for >100s
+        
+        if use_database and self.auto_scroll:
+            # Get data from database for the specified time range
+            plot_data = self.data_model.get_plot_data(time_range_seconds=self.time_range_seconds)
+        else:
+            # Use in-memory data for short ranges or manual scrolling
+            plot_data = self.data_model.get_plot_data()
+        
         times = np.array(plot_data['timestamps'])
         
-        # Apply time range filter if not showing all data
-        if self.time_range_seconds > 0 and len(times) > 0:
+        # Apply time range filter if not showing all data and not using database
+        if self.time_range_seconds > 0 and len(times) > 0 and not use_database:
             if self.auto_scroll:
                 # Show last N seconds
                 max_time = times[-1]
