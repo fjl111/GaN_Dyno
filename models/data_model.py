@@ -66,6 +66,9 @@ class DynamometerData:
         # Test data storage
         self.test_data = []
         
+        # 3D sweep data storage
+        self.sweep_test_data = []
+        
     def update_from_json(self, data):
         """Update data from JSON received from ESP32."""
         # Update current values from JSON data
@@ -153,6 +156,18 @@ class DynamometerData:
     def clear_test_data(self):
         """Clear all test data."""
         self.test_data = []
+        
+    def add_sweep_data_point(self, data_point):
+        """Add a data point from 3D sweep test."""
+        self.sweep_test_data.append(data_point)
+        
+    def get_sweep_data(self):
+        """Get 3D sweep test data."""
+        return self.sweep_test_data.copy()
+        
+    def clear_sweep_data(self):
+        """Clear 3D sweep test data."""
+        self.sweep_test_data = []
         
     def _clear_time_series_data(self):
         """Clear all time series data (used on ESP32 restart detection)."""

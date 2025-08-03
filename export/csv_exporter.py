@@ -241,6 +241,92 @@ class CSVExporter:
         """Export complete session data from database."""
         return self.export_time_range_data(data_model, 0, default_filename)  # 0 = all data
     
+    def export_3d_sweep_data(self, sweep_data, default_filename=None):
+        """Export 3D sweep data to CSV file in MATLAB-compatible format."""
+        if not sweep_data:
+            if self.parent_widget:
+                QMessageBox.warning(self.parent_widget, "Warning", "No 3D sweep data to export")
+            return False, "No 3D sweep data to export"
+            
+        # Generate default filename if not provided
+        if not default_filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            default_filename = f"dyno_3d_sweep_{timestamp}.csv"
+            
+        # Get save location from user
+        filename, _ = QFileDialog.getSaveFileName(
+            self.parent_widget, 
+            "Export 3D Sweep Data",
+            default_filename,
+            "CSV files (*.csv);;All files (*.*)"
+        )
+        
+        if not filename:
+            return False, "Export cancelled"
+            
+        try:
+            self._write_3d_sweep_csv_file(filename, sweep_data)
+            
+            if self.parent_widget:
+                QMessageBox.information(self.parent_widget, "Success", 
+                                      f"3D sweep data exported to {filename}")
+            return True, f"3D sweep data exported to {filename}"
+            
+        except Exception as e:
+            error_msg = f"Failed to export: {str(e)}"
+            if self.parent_widget:
+                QMessageBox.critical(self.parent_widget, "Error", error_msg)
+            return False, error_msg
+            
+    def _write_3d_sweep_csv_file(self, filename, sweep_data):
+        """Write 3D sweep data to CSV file in MATLAB-compatible format."""
+        # Define fieldnames optimized for MATLAB 3D plotting
+        fieldnames = [
+            'target_rpm', 'target_amperage', 'actual_rpm', 'actual_amperage',
+            'total_power', 'drive_power', 'brake_power',
+            'max_temp_fet', 'max_temp_motor', 'drive_temp_fet', 'drive_temp_motor',
+            'brake_temp_fet', 'brake_temp_motor', 'drive_voltage', 'brake_voltage',
+            'step_number'
+        ]
+        
+        with open(filename, 'w', newline='') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            # Write header
+            writer.writeheader()
+            
+            # Write metadata as comments (MATLAB can ignore lines starting with %)
+            csvfile.write(f"% 3D Sweep Test Data Export\n")
+            csvfile.write(f"% Export Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            csvfile.write(f"% Total Data Points: {len(sweep_data)}\n")
+            
+            if sweep_data:
+                # Calculate sweep ranges from data
+                rpm_values = sorted(set(d['target_rpm'] for d in sweep_data))
+                amp_values = sorted(set(d['target_amperage'] for d in sweep_data))
+                
+                csvfile.write(f"% RPM Range: {min(rpm_values):.0f} to {max(rpm_values):.0f} ({len(rpm_values)} steps)\n")
+                csvfile.write(f"% Amperage Range: {min(amp_values):.2f} to {max(amp_values):.2f} A ({len(amp_values)} steps)\n")
+                csvfile.write(f"% \n")
+                csvfile.write(f"% MATLAB Usage Examples:\n")
+                csvfile.write(f"% data = readtable('{filename.split('/')[-1]}', 'CommentStyle', '%%');\n")
+                csvfile.write(f"% [RPM, AMP] = meshgrid(unique(data.target_rpm), unique(data.target_amperage));\n")
+                csvfile.write(f"% POWER = griddata(data.target_rpm, data.target_amperage, data.total_power, RPM, AMP);\n")
+                csvfile.write(f"% surf(RPM, AMP, POWER); xlabel('RPM'); ylabel('Amperage (A)'); zlabel('Power (W)');\n")
+                csvfile.write(f"% \n")
+            
+            # Write data rows
+            for i, row in enumerate(sweep_data):
+                # Ensure all required fields are present
+                output_row = {}
+                for field in fieldnames:
+                    if field == 'step_number':
+                        output_row[field] = i + 1
+                    else:
+                        output_row[field] = row.get(field, 0)
+                
+                writer.writerow(output_row)
+    
     def get_export_options(self):
         """Get available export time range options."""
         return {

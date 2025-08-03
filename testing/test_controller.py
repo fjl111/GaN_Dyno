@@ -46,6 +46,101 @@ class TestThread(QThread):
         self.running = False
 
 
+class TwoDimensionalSweepThread(QThread):
+    """Thread for running 2D sweep tests over speed and brake amperage."""
+    
+    status_update = pyqtSignal(str)
+    test_complete = pyqtSignal()
+    data_point_collected = pyqtSignal(dict)  # Emit data points as they're collected
+    
+    def __init__(self, rpm_range, amperage_range, rpm_steps, amperage_steps, 
+                 command_interface, data_model, step_duration=5):
+        super().__init__()
+        self.start_rpm, self.end_rpm = rpm_range
+        self.start_amperage, self.end_amperage = amperage_range
+        self.rpm_steps = rpm_steps
+        self.amperage_steps = amperage_steps
+        self.command_interface = command_interface
+        self.data_model = data_model
+        self.step_duration = step_duration
+        self.running = False
+        self.total_steps = rpm_steps * amperage_steps
+        self.current_step = 0
+        
+    def run(self):
+        """Execute the 2D sweep test sequence."""
+        self.running = True
+        self.current_step = 0
+        
+        rpm_values = np.linspace(self.start_rpm, self.end_rpm, self.rpm_steps)
+        amperage_values = np.linspace(self.start_amperage, self.end_amperage, self.amperage_steps)
+        
+        # Perform nested sweep: for each RPM, sweep through all amperage values
+        for rpm_idx, rpm in enumerate(rpm_values):
+            if not self.running:
+                break
+                
+            # Set drive speed
+            self.command_interface.set_drive_speed(int(rpm))
+            
+            for amp_idx, amperage in enumerate(amperage_values):
+                if not self.running:
+                    break
+                    
+                self.current_step += 1
+                
+                # Update status
+                self.status_update.emit(
+                    f"Step {self.current_step}/{self.total_steps}: "
+                    f"{rpm:.0f} RPM, {amperage:.2f} A ({self.step_duration}s)"
+                )
+                
+                # Set brake load
+                self.command_interface.set_brake_load(amperage)
+                
+                # Wait for stabilization
+                self.msleep(self.step_duration * 1000)
+                
+                # Collect data point
+                data_point = self._collect_data_point(rpm, amperage)
+                self.data_point_collected.emit(data_point)
+                
+        # Reset to safe state
+        self.command_interface.set_drive_speed(0)
+        self.command_interface.set_brake_load(0.0)
+        
+        self.test_complete.emit()
+        
+    def _collect_data_point(self, target_rpm, target_amperage):
+        """Collect a single data point with current system state."""
+        current_values = self.data_model.current_values
+        
+        data_point = {
+            'target_rpm': target_rpm,
+            'target_amperage': target_amperage,
+            'actual_rpm': current_values['drive']['rpm'],
+            'actual_amperage': current_values['brake']['current'],
+            'drive_power': current_values['dyno']['drive_power'],
+            'brake_power': current_values['dyno']['brake_power'],
+            'total_power': current_values['dyno']['drive_power'] + current_values['dyno']['brake_power'],
+            'drive_temp_fet': current_values['drive']['temp_fet'],
+            'drive_temp_motor': current_values['drive']['temp_motor'],
+            'brake_temp_fet': current_values['brake']['temp_fet'],
+            'brake_temp_motor': current_values['brake']['temp_motor'],
+            'max_temp_fet': max(current_values['drive']['temp_fet'], current_values['brake']['temp_fet']),
+            'max_temp_motor': max(current_values['drive']['temp_motor'], current_values['brake']['temp_motor']),
+            'drive_voltage': current_values['drive']['voltage'],
+            'brake_voltage': current_values['brake']['voltage'],
+            'timestamp': self.current_step
+        }
+        
+        return data_point
+        
+    def stop(self):
+        """Stop the test sequence."""
+        self.running = False
+
+
 class TestController:
     """Controller for automated testing functionality."""
     
@@ -58,11 +153,16 @@ class TestController:
         # Callbacks
         self.status_callback = None
         self.complete_callback = None
+        self.data_point_callback = None
         
-    def set_callbacks(self, status_callback, complete_callback):
+        # 3D sweep data storage
+        self.sweep_data = []
+        
+    def set_callbacks(self, status_callback, complete_callback, data_point_callback=None):
         """Set callback functions for test status updates."""
         self.status_callback = status_callback
         self.complete_callback = complete_callback
+        self.data_point_callback = data_point_callback
         
     def start_speed_sweep(self, start_rpm, end_rpm, steps, step_duration=3):
         """Start an automated speed sweep test."""
@@ -101,6 +201,55 @@ class TestController:
             
         except Exception as e:
             return False, f"Failed to start test: {str(e)}"
+    
+    def start_3d_sweep(self, rpm_range, amperage_range, rpm_steps, amperage_steps, step_duration=5):
+        """Start an automated 3D sweep test over RPM and brake amperage."""
+        if self.test_running:
+            return False, "Test already running"
+            
+        try:
+            # Validate parameters
+            start_rpm, end_rpm = rpm_range
+            start_amperage, end_amperage = amperage_range
+            
+            validation_ok, errors = TestValidator.validate_3d_sweep(
+                start_rpm, end_rpm, rpm_steps, 
+                start_amperage, end_amperage, amperage_steps, 
+                step_duration
+            )
+            
+            if not validation_ok:
+                return False, "; ".join(errors)
+                
+            # Clear previous test data
+            self.data_model.clear_test_data()
+            self.sweep_data = []
+            
+            # Create and start 3D sweep thread
+            self.test_thread = TwoDimensionalSweepThread(
+                rpm_range, amperage_range, rpm_steps, amperage_steps,
+                self.command_interface, self.data_model, step_duration
+            )
+            
+            # Connect callbacks
+            if self.status_callback:
+                self.test_thread.status_update.connect(self.status_callback)
+            if self.complete_callback:
+                self.test_thread.test_complete.connect(self._on_test_complete)
+            
+            # Connect data point collection
+            self.test_thread.data_point_collected.connect(self._on_data_point_collected)
+                
+            self.test_thread.start()
+            self.test_running = True
+            
+            total_steps = rpm_steps * amperage_steps
+            return True, (f"Starting 3D sweep: {start_rpm}-{end_rpm} RPM ({rpm_steps} steps), "
+                         f"{start_amperage}-{end_amperage} A ({amperage_steps} steps), "
+                         f"{total_steps} total measurements ({step_duration}s each)")
+            
+        except Exception as e:
+            return False, f"Failed to start 3D sweep: {str(e)}"
             
     def stop_test(self):
         """Stop the currently running test."""
@@ -119,6 +268,20 @@ class TestController:
         self.test_running = False
         if self.complete_callback:
             self.complete_callback()
+    
+    def _on_data_point_collected(self, data_point):
+        """Handle data point collection during 3D sweep."""
+        self.sweep_data.append(data_point)
+        if self.data_point_callback:
+            self.data_point_callback(data_point)
+    
+    def get_sweep_data(self):
+        """Get collected 3D sweep data."""
+        return self.sweep_data.copy()
+    
+    def clear_sweep_data(self):
+        """Clear collected 3D sweep data."""
+        self.sweep_data = []
 
 
 class TestSequence:
@@ -202,5 +365,54 @@ class TestValidator:
             errors.append("RPM cannot be negative")
         if rpm > 10000:
             errors.append("RPM exceeds safety limit (10000 RPM)")
+            
+        return len(errors) == 0, errors
+    
+    @staticmethod
+    def validate_3d_sweep(start_rpm, end_rpm, rpm_steps, start_amperage, end_amperage, amperage_steps, step_duration=5):
+        """Validate 3D sweep parameters."""
+        errors = []
+        
+        # Validate RPM parameters
+        if start_rpm < 0:
+            errors.append("Start RPM cannot be negative")
+        if end_rpm < 0:
+            errors.append("End RPM cannot be negative")
+        if start_rpm >= end_rpm:
+            errors.append("Start RPM must be less than end RPM")
+        if end_rpm > 10000:
+            errors.append("End RPM exceeds safety limit (10000 RPM)")
+        if rpm_steps <= 0:
+            errors.append("RPM steps must be positive")
+        if rpm_steps > 50:
+            errors.append("RPM steps exceed reasonable limit (50)")
+            
+        # Validate amperage parameters
+        if start_amperage < 0:
+            errors.append("Start amperage cannot be negative")
+        if end_amperage < 0:
+            errors.append("End amperage cannot be negative")
+        if start_amperage >= end_amperage:
+            errors.append("Start amperage must be less than end amperage")
+        if end_amperage > 50:
+            errors.append("End amperage exceeds safety limit (50 A)")
+        if amperage_steps <= 0:
+            errors.append("Amperage steps must be positive")
+        if amperage_steps > 50:
+            errors.append("Amperage steps exceed reasonable limit (50)")
+            
+        # Validate step duration
+        if step_duration <= 0:
+            errors.append("Step duration must be positive")
+        if step_duration > 300:
+            errors.append("Step duration exceeds safety limit (300 seconds)")
+            
+        # Validate total test duration
+        total_steps = rpm_steps * amperage_steps
+        total_duration = total_steps * step_duration
+        if total_duration > 7200:  # 2 hours
+            errors.append(f"Total test duration ({total_duration/60:.1f} minutes) exceeds safety limit (120 minutes)")
+        if total_steps > 2500:  # Reasonable data point limit
+            errors.append(f"Total data points ({total_steps}) exceeds reasonable limit (2500)")
             
         return len(errors) == 0, errors

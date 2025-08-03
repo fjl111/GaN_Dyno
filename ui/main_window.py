@@ -143,11 +143,13 @@ class DynamometerMainWindow(QMainWindow):
         
         # Test widget signals
         self.test_widget.speed_sweep_requested.connect(self.start_speed_sweep)
+        self.test_widget.sweep_3d_requested.connect(self.start_3d_sweep)
         self.test_widget.test_stop_requested.connect(self.stop_test)
         
         # Results widget signals
         self.results_widget.clear_results_requested.connect(self.clear_test_results)
         self.results_widget.export_results_requested.connect(self.export_test_results)
+        self.results_widget.plot_exported.connect(self.on_plot_exported)
         
         # Console widget signals
         self.console_widget.command_requested.connect(self.send_console_command)
@@ -165,7 +167,7 @@ class DynamometerMainWindow(QMainWindow):
         )
         
         # Test controller callbacks
-        self.test_controller.set_callbacks(self.update_test_status, self.on_test_complete)
+        self.test_controller.set_callbacks(self.update_test_status, self.on_test_complete, self.on_3d_sweep_data_point)
         
     def setup_timers(self):
         """Setup update timers."""
@@ -260,6 +262,20 @@ class DynamometerMainWindow(QMainWindow):
             self.console_widget.log_info(message)
         else:
             QMessageBox.critical(self, "Test Error", message)
+    
+    def start_3d_sweep(self, rpm_range, amp_range, rpm_steps, amp_steps, duration):
+        """Start automated 3D sweep test."""
+        success, message = self.test_controller.start_3d_sweep(
+            rpm_range, amp_range, rpm_steps, amp_steps, duration
+        )
+        
+        if success:
+            self.test_widget.set_test_running(True)
+            self.console_widget.log_info(message)
+            # Clear previous sweep data
+            self.data_model.clear_sweep_data()
+        else:
+            QMessageBox.critical(self, "3D Sweep Error", message)
             
     def stop_test(self):
         """Stop current test."""
@@ -271,7 +287,10 @@ class DynamometerMainWindow(QMainWindow):
     def clear_test_results(self):
         """Clear test results."""
         self.data_model.clear_test_data()
+        self.data_model.clear_sweep_data()
+        self.test_controller.clear_sweep_data()
         self.results_widget.clear_results()
+        self.results_widget.clear_3d_plots()
         self.console_widget.log_info("Test results cleared")
         
     def export_test_results(self):
@@ -326,6 +345,36 @@ class DynamometerMainWindow(QMainWindow):
         self.test_widget.set_test_running(False)
         self.test_widget.update_test_status("Test completed")
         self.console_widget.log_info("Test completed")
+        
+        # If we have 3D sweep data, offer to export it
+        sweep_data = self.test_controller.get_sweep_data()
+        if sweep_data:
+            reply = QMessageBox.question(
+                self, "Export 3D Sweep Data", 
+                f"3D sweep completed with {len(sweep_data)} data points. Export to CSV for MATLAB?",
+                QMessageBox.Yes | QMessageBox.No, 
+                QMessageBox.Yes
+            )
+            if reply == QMessageBox.Yes:
+                success, message = self.csv_exporter.export_3d_sweep_data(sweep_data)
+                if success:
+                    self.console_widget.log_info(message)
+                else:
+                    self.console_widget.log_error(message)
+    
+    def on_3d_sweep_data_point(self, data_point):
+        """Handle 3D sweep data point collection."""
+        self.data_model.add_sweep_data_point(data_point)
+        # Update status with current progress
+        sweep_data = self.test_controller.get_sweep_data()
+        if sweep_data:
+            self.console_widget.log_info(f"3D Sweep: Collected {len(sweep_data)} data points")
+            # Update 3D plots in real-time
+            self.results_widget.update_3d_plots(sweep_data)
+    
+    def on_plot_exported(self, filename):
+        """Handle plot export completion."""
+        self.console_widget.log_info(f"3D plot exported: {filename}")
         
     def update_gui(self):
         """Update GUI elements."""
