@@ -32,11 +32,13 @@ class DataStorage:
                     relative_time REAL NOT NULL,
                     drive_rpm INTEGER,
                     drive_current REAL,
+                    drive_current_in REAL,
                     drive_voltage REAL,
                     drive_temp_fet REAL,
                     drive_temp_motor REAL,
                     brake_rpm INTEGER,
                     brake_current REAL,
+                    brake_current_in REAL,
                     brake_voltage REAL,
                     brake_temp_fet REAL,
                     brake_temp_motor REAL,
@@ -45,6 +47,17 @@ class DataStorage:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            
+            # Add columns for input currents if they don't exist (for existing databases)
+            try:
+                cursor.execute('ALTER TABLE dyno_data ADD COLUMN drive_current_in REAL DEFAULT 0.0')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+                
+            try:
+                cursor.execute('ALTER TABLE dyno_data ADD COLUMN brake_current_in REAL DEFAULT 0.0')
+            except sqlite3.OperationalError:
+                pass  # Column already exists
             
             # Create index for efficient time-based queries
             cursor.execute('''
@@ -70,18 +83,18 @@ class DataStorage:
                     
                     cursor.execute('''
                         INSERT INTO dyno_data (
-                            timestamp, relative_time, drive_rpm, drive_current, 
+                            timestamp, relative_time, drive_rpm, drive_current, drive_current_in,
                             drive_voltage, drive_temp_fet, drive_temp_motor,
-                            brake_rpm, brake_current, brake_voltage, 
+                            brake_rpm, brake_current, brake_current_in, brake_voltage, 
                             brake_temp_fet, brake_temp_motor, mechanical_power,
                             session_start
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         timestamp, relative_time,
-                        drive_data.get('rpm', 0), drive_data.get('current', 0.0),
+                        drive_data.get('rpm', 0), drive_data.get('current', 0.0), drive_data.get('current_in', 0.0),
                         drive_data.get('voltage', 0.0), drive_data.get('temp_fet', 0.0),
                         drive_data.get('temp_motor', 0.0),
-                        brake_data.get('rpm', 0), brake_data.get('current', 0.0),
+                        brake_data.get('rpm', 0), brake_data.get('current', 0.0), brake_data.get('current_in', 0.0),
                         brake_data.get('voltage', 0.0), brake_data.get('temp_fet', 0.0),
                         brake_data.get('temp_motor', 0.0),
                         dyno_data.get('drive_power', 0.0) + dyno_data.get('brake_power', 0.0),
@@ -112,8 +125,8 @@ class DataStorage:
                     if time_range_seconds is None:
                         # Get all data for this session
                         cursor.execute('''
-                            SELECT relative_time, drive_rpm, drive_current, drive_voltage,
-                                   drive_temp_fet, drive_temp_motor, brake_rpm, brake_current,
+                            SELECT relative_time, drive_rpm, drive_current, drive_current_in, drive_voltage,
+                                   drive_temp_fet, drive_temp_motor, brake_rpm, brake_current, brake_current_in,
                                    brake_voltage, brake_temp_fet, brake_temp_motor, mechanical_power
                             FROM dyno_data 
                             WHERE session_start = ?
@@ -122,8 +135,8 @@ class DataStorage:
                     else:
                         # Get data for specific time range (last N seconds)
                         cursor.execute('''
-                            SELECT relative_time, drive_rpm, drive_current, drive_voltage,
-                                   drive_temp_fet, drive_temp_motor, brake_rpm, brake_current,
+                            SELECT relative_time, drive_rpm, drive_current, drive_current_in, drive_voltage,
+                                   drive_temp_fet, drive_temp_motor, brake_rpm, brake_current, brake_current_in,
                                    brake_voltage, brake_temp_fet, brake_temp_motor, mechanical_power
                             FROM dyno_data 
                             WHERE session_start = ?
@@ -145,16 +158,18 @@ class DataStorage:
                         'timestamps': [row[0] for row in rows],
                         'drive_rpm': [row[1] for row in rows],
                         'drive_current': [row[2] for row in rows],
-                        'drive_voltage': [row[3] for row in rows],
-                        'drive_temp_fet': [row[4] for row in rows],
-                        'drive_temp_motor': [row[5] for row in rows],
-                        'brake_rpm': [row[6] for row in rows],
-                        'brake_current': [row[7] for row in rows],
-                        'brake_voltage': [row[8] for row in rows],
-                        'brake_temp_fet': [row[9] for row in rows],
-                        'brake_temp_motor': [row[10] for row in rows],
-                        'drive_power': [row[11] / 2 for row in rows],  # Split stored power equally for now
-                        'brake_power': [row[11] / 2 for row in rows]
+                        'drive_current_in': [row[3] for row in rows],
+                        'drive_voltage': [row[4] for row in rows],
+                        'drive_temp_fet': [row[5] for row in rows],
+                        'drive_temp_motor': [row[6] for row in rows],
+                        'brake_rpm': [row[7] for row in rows],
+                        'brake_current': [row[8] for row in rows],
+                        'brake_current_in': [row[9] for row in rows],
+                        'brake_voltage': [row[10] for row in rows],
+                        'brake_temp_fet': [row[11] for row in rows],
+                        'brake_temp_motor': [row[12] for row in rows],
+                        'drive_power': [row[13] / 2 for row in rows],  # Split stored power equally for now
+                        'brake_power': [row[13] / 2 for row in rows]
                     }
                     
                     return data
@@ -240,11 +255,13 @@ class DataStorage:
             'timestamps': [],
             'drive_rpm': [],
             'drive_current': [],
+            'drive_current_in': [],
             'drive_voltage': [],
             'drive_temp_fet': [],
             'drive_temp_motor': [],
             'brake_rpm': [],
             'brake_current': [],
+            'brake_current_in': [],
             'brake_voltage': [],
             'brake_temp_fet': [],
             'brake_temp_motor': [],

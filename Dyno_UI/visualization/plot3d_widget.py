@@ -65,6 +65,10 @@ class Plot3DWidget(QWidget):
         self.export_data_button.clicked.connect(self.export_data)
         controls_layout.addWidget(self.export_data_button)
         
+        self.import_data_button = QPushButton("Import CSV")
+        self.import_data_button.clicked.connect(self.import_csv_data)
+        controls_layout.addWidget(self.import_data_button)
+        
         main_layout.addLayout(controls_layout)
         
         # Create matplotlib figure for 3D plotting
@@ -127,39 +131,82 @@ class Plot3DWidget(QWidget):
             self.figure.clear()
             ax = self.figure.add_subplot(111, projection='3d')
             
-            # Create grid for surface plot
-            rpm_unique = sorted(list(set(rpm_values)))
-            amp_unique = sorted(list(set(amperage_values)))
-            
-            if len(rpm_unique) < 2 or len(amp_unique) < 2 or not SCIPY_AVAILABLE:
-                # Not enough data points for surface plot or scipy not available, use scatter plot
-                scatter = ax.scatter(rpm_values, amperage_values, z_values, 
-                                   c=z_values, cmap=colormap, s=50, alpha=0.8)
-                self.figure.colorbar(scatter, ax=ax, shrink=0.8)
+            # Create a plane surface from the data
+            if len(rpm_values) >= 3 and SCIPY_AVAILABLE:
+                # Use all available data to create a smooth plane surface
+                rpm_min, rpm_max = min(rpm_values), max(rpm_values)
+                amp_min, amp_max = min(amperage_values), max(amperage_values)
                 
-                if not SCIPY_AVAILABLE:
-                    # Add note about missing scipy
-                    ax.text(0.02, 0.98, 'Note: Install scipy for surface plots', 
-                           transform=ax.transAxes, fontsize=8, color='red', 
-                           verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-            else:
-                # Create meshgrid for surface plot
-                RPM, AMP = np.meshgrid(rpm_unique, amp_unique)
+                # Create a fine grid for smooth plane
+                rpm_range = np.linspace(rpm_min, rpm_max, 50)
+                amp_range = np.linspace(amp_min, amp_max, 50)
+                RPM, AMP = np.meshgrid(rpm_range, amp_range)
                 
-                # Interpolate z values onto grid
+                # Interpolate z values onto the fine grid to create plane
                 Z = griddata((rpm_values, amperage_values), z_values, (RPM, AMP), method='linear')
                 
-                # Create surface plot
-                surface = ax.plot_surface(RPM, AMP, Z, cmap=colormap, alpha=0.8, 
-                                        linewidth=0, antialiased=True)
+                # Fill NaN values with nearest neighbor interpolation for complete plane
+                mask = np.isnan(Z)
+                if np.any(mask):
+                    Z_nearest = griddata((rpm_values, amperage_values), z_values, (RPM, AMP), method='nearest')
+                    Z[mask] = Z_nearest[mask]
+                
+                # Create smooth surface plane
+                surface = ax.plot_surface(RPM, AMP, Z, cmap=colormap, alpha=0.7, 
+                                        linewidth=0, antialiased=True, shade=True)
                 
                 # Add colorbar
                 self.figure.colorbar(surface, ax=ax, shrink=0.8)
                 
-                # Also add scatter points for actual data
+                # Add scatter points for actual data on top of plane
                 ax.scatter(rpm_values, amperage_values, z_values, 
-                          c='red', s=20, alpha=1.0, label='Data Points')
+                          c='red', s=30, alpha=1.0, label='Data Points', edgecolors='black', linewidth=0.5)
                 ax.legend()
+                
+            else:
+                # Fallback: Create a basic plane using linear regression if scipy not available
+                # or insufficient data points
+                if len(rpm_values) >= 3:
+                    # Fit a plane using least squares
+                    A = np.column_stack([rpm_values, amperage_values, np.ones(len(rpm_values))])
+                    coeffs, _, _, _ = np.linalg.lstsq(A, z_values, rcond=None)
+                    
+                    # Create plane grid
+                    rpm_min, rpm_max = min(rpm_values), max(rpm_values)
+                    amp_min, amp_max = min(amperage_values), max(amperage_values)
+                    
+                    # Extend range slightly for better visualization
+                    rpm_range_ext = (rpm_max - rpm_min) * 0.1
+                    amp_range_ext = (amp_max - amp_min) * 0.1
+                    
+                    rpm_plane = np.linspace(rpm_min - rpm_range_ext, rpm_max + rpm_range_ext, 30)
+                    amp_plane = np.linspace(amp_min - amp_range_ext, amp_max + amp_range_ext, 30)
+                    RPM, AMP = np.meshgrid(rpm_plane, amp_plane)
+                    
+                    # Calculate Z values for the fitted plane
+                    Z = coeffs[0] * RPM + coeffs[1] * AMP + coeffs[2]
+                    
+                    # Create surface plot
+                    surface = ax.plot_surface(RPM, AMP, Z, cmap=colormap, alpha=0.6, 
+                                            linewidth=0, antialiased=True)
+                    
+                    # Add colorbar
+                    self.figure.colorbar(surface, ax=ax, shrink=0.8)
+                    
+                    # Add scatter points for actual data
+                    ax.scatter(rpm_values, amperage_values, z_values, 
+                              c='red', s=30, alpha=1.0, label='Data Points', edgecolors='black', linewidth=0.5)
+                    ax.legend()
+                    
+                else:
+                    # Very few points, just show scatter with note
+                    scatter = ax.scatter(rpm_values, amperage_values, z_values, 
+                                       c=z_values, cmap=colormap, s=80, alpha=0.8, edgecolors='black', linewidth=0.5)
+                    self.figure.colorbar(scatter, ax=ax, shrink=0.8)
+                    
+                    ax.text(0.02, 0.98, 0.98, 'Note: Need at least 3 data points for plane visualization', 
+                           transform=ax.transAxes, fontsize=8, color='orange', 
+                           verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
                 
             # Set labels and title
             ax.set_xlabel('RPM', fontsize=12)
@@ -253,13 +300,13 @@ class Plot3DWidget(QWidget):
                 ]
                 
                 with open(filename, 'w', newline='') as csvfile:
-                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                    writer.writeheader()
-                    
-                    # Write metadata comments
+                    # Write metadata comments first
                     csvfile.write(f"# 3D Sweep Data Export\n")
                     csvfile.write(f"# Export Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                     csvfile.write(f"# Total Data Points: {len(self.sweep_data)}\n")
+                    
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                    writer.writeheader()
                     
                     # Write data
                     for data_point in self.sweep_data:
@@ -289,9 +336,165 @@ class Plot3DWidget(QWidget):
                 f"RPM range: {min(rpm_values):.0f} - {max(rpm_values):.0f}\n"
                 f"Amperage range: {min(amp_values):.2f} - {max(amp_values):.2f} A")
         
+    def import_csv_data(self):
+        """Import sweep data from a CSV file."""
+        # Get file from user
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import 3D Sweep Data",
+            "",
+            "CSV files (*.csv);;All files (*.*)"
+        )
+        
+        if not filename:
+            return
+            
+        try:
+            import csv
+            
+            # Read CSV file
+            imported_data = []
+            required_columns = ['target_rpm', 'target_amperage', 'max_temp_fet', 'total_power']
+            
+            with open(filename, 'r', newline='') as csvfile:
+                # Skip comment lines that start with #
+                lines = [line for line in csvfile if not line.strip().startswith('#')]
+                csvfile.seek(0)
+                
+                # Read the file content without comment lines
+                content = ''.join(line for line in csvfile if not line.strip().startswith('#'))
+                
+                # Create a string reader for the filtered content
+                from io import StringIO
+                string_reader = StringIO(content)
+                
+                # Detect delimiter with fallback options
+                try:
+                    dialect = csv.Sniffer().sniff(content[:1024], delimiters=',;\t ')
+                    reader = csv.DictReader(string_reader, dialect=dialect)
+                except csv.Error:
+                    # Fallback: try common delimiters manually
+                    string_reader.seek(0)
+                    first_line = string_reader.readline().strip()
+                    
+                    # Count occurrences of different delimiters
+                    comma_count = first_line.count(',')
+                    semicolon_count = first_line.count(';')
+                    tab_count = first_line.count('\t')
+                    space_count = len(first_line.split()) - 1  # spaces between words
+                    
+                    # Choose delimiter with highest count
+                    delimiter_counts = [
+                        (',', comma_count),
+                        (';', semicolon_count),
+                        ('\t', tab_count),
+                        (' ', space_count)
+                    ]
+                    delimiter = max(delimiter_counts, key=lambda x: x[1])[0]
+                    
+                    string_reader.seek(0)
+                    reader = csv.DictReader(string_reader, delimiter=delimiter)
+                
+                # Validate required columns exist
+                fieldnames = reader.fieldnames
+                if not fieldnames:
+                    raise ValueError("CSV file appears to be empty or malformed")
+                
+                missing_columns = [col for col in required_columns if col not in fieldnames]
+                if missing_columns:
+                    QMessageBox.warning(self, "Missing Columns", 
+                                      f"CSV file is missing required columns: {', '.join(missing_columns)}\n\n"
+                                      f"Required columns: {', '.join(required_columns)}\n"
+                                      f"Found columns: {', '.join(fieldnames)}")
+                    return
+                
+                # Read and convert data
+                for row_num, row in enumerate(reader, start=2):  # Start at 2 to account for header
+                    try:
+                        # Create data point with required fields
+                        data_point = {
+                            'target_rpm': float(row['target_rpm']),
+                            'target_amperage': float(row['target_amperage']),
+                            'max_temp_fet': float(row['max_temp_fet']),
+                            'total_power': float(row['total_power'])
+                        }
+                        
+                        # Add optional fields if they exist
+                        optional_fields = {
+                            'actual_rpm': 'target_rpm',  # Default to target if not present
+                            'actual_amperage': 'target_amperage',
+                            'drive_power': 'total_power',
+                            'brake_power': 'total_power',
+                            'max_temp_motor': 'max_temp_fet',
+                            'drive_temp_fet': 'max_temp_fet',
+                            'drive_temp_motor': 'max_temp_fet',
+                            'brake_temp_fet': 'max_temp_fet',
+                            'brake_temp_motor': 'max_temp_fet',
+                            'drive_voltage': 0,
+                            'brake_voltage': 0
+                        }
+                        
+                        for field, default_field in optional_fields.items():
+                            if field in row and row[field]:
+                                try:
+                                    data_point[field] = float(row[field])
+                                except ValueError:
+                                    if isinstance(default_field, str) and default_field in data_point:
+                                        data_point[field] = data_point[default_field]
+                                    else:
+                                        data_point[field] = default_field
+                            else:
+                                if isinstance(default_field, str) and default_field in data_point:
+                                    data_point[field] = data_point[default_field]
+                                else:
+                                    data_point[field] = default_field
+                        
+                        imported_data.append(data_point)
+                        
+                    except ValueError as e:
+                        QMessageBox.warning(self, "Data Error", 
+                                          f"Error parsing row {row_num}: {str(e)}\n"
+                                          f"Row data: {dict(row)}")
+                        return
+                
+            if not imported_data:
+                QMessageBox.warning(self, "No Data", "No valid data found in CSV file")
+                return
+                
+            # Ask user if they want to replace or append data
+            if self.sweep_data:
+                reply = QMessageBox.question(self, "Import Data", 
+                                           f"Found {len(imported_data)} data points.\n\n"
+                                           f"Replace existing data ({len(self.sweep_data)} points) or append to it?",
+                                           QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
+                                           QMessageBox.StandardButton.Yes)
+                
+                if reply == QMessageBox.StandardButton.Cancel:
+                    return
+                elif reply == QMessageBox.StandardButton.Yes:
+                    # Replace existing data
+                    self.sweep_data = imported_data
+                else:
+                    # Append to existing data
+                    self.sweep_data.extend(imported_data)
+            else:
+                # No existing data, just set it
+                self.sweep_data = imported_data
+            
+            # Update the plot
+            self.update_plot()
+            
+            QMessageBox.information(self, "Success", 
+                                  f"Successfully imported {len(imported_data)} data points from CSV.\n"
+                                  f"Total data points: {len(self.sweep_data)}")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Import Error", f"Failed to import CSV file:\n{str(e)}")
+    
     def set_enabled(self, enabled):
         """Enable/disable the widget."""
         self.plot_type_combo.setEnabled(enabled)
         self.refresh_button.setEnabled(enabled)
         self.export_button.setEnabled(enabled and bool(self.sweep_data))
         self.export_data_button.setEnabled(enabled and bool(self.sweep_data))
+        self.import_data_button.setEnabled(enabled)

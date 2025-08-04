@@ -49,7 +49,7 @@
 
 // VESC CAN IDs (configurable through VESC)
 #define DRIVE_VESC_ID 0x38
-#define BRAKE_VESC_ID 0x02
+#define BRAKE_VESC_ID 0x6E
 
 //Motor specifications
 #define MOTOR_POLE_PAIRS_DRIVE 7 // Number of pole pairs for drive motor
@@ -82,6 +82,7 @@ DynoData dyno_data = {0};
 unsigned long last_status_request = 0;
 unsigned long last_data_send = 0;
 unsigned long last_heartbeat = 0;
+unsigned long last_command_send = 0;
 
 // Response time testing variables
 unsigned long command_receive_time = 0;
@@ -90,7 +91,9 @@ bool timing_active = false;
 
 // Set the frequency of the status checks
 // Send data to the computer every 100ms
-const unsigned long DATA_SEND_INTERVAL = 100 ;
+const unsigned long DATA_SEND_INTERVAL = 100;
+// Send commands to VESCs every 50ms to maintain control
+const unsigned long COMMAND_SEND_INTERVAL = 50;
 
 // Function prototypes
 void setupGPIO();
@@ -113,6 +116,7 @@ void checkButtons();
 void handlePingCommand();
 void sendCommandAck(String command, unsigned long receive_time, unsigned long send_time);
 unsigned long getMicroseconds();
+void sendContinuousCommands();
 
 void setup() {
     // Use a standard high baud rate to communicate over serial with laptop
@@ -152,6 +156,12 @@ void loop() {
     if (current_time - last_data_send >= DATA_SEND_INTERVAL) {
         sendDataToPC();
         last_data_send = current_time;
+    }
+    
+    // Send continuous commands to VESCs to maintain control
+    if (current_time - last_command_send >= COMMAND_SEND_INTERVAL) {
+        sendContinuousCommands();
+        last_command_send = current_time;
     }
     
     // Process serial commands from PC immediately as they are received for quick control
@@ -333,13 +343,13 @@ void calculateDynoMetrics() {
     // Calculate drive power
     if (drive_data.connected) {
         // Power = Voltage × Current (electrical power approximation)
-        dyno_data.drive_power = drive_data.voltage_in * drive_data.current;
+        dyno_data.drive_power = drive_data.voltage_in * drive_data.current_in;
     }
     
     // Calculate brake power
     if (brake_data.connected) {
         // Power = Voltage × Current (electrical power approximation)
-        dyno_data.brake_power = brake_data.voltage_in * brake_data.current;
+        dyno_data.brake_power = brake_data.voltage_in * brake_data.current_in;
     }
     
     // Update data age
@@ -357,6 +367,7 @@ void sendDataToPC() {
     JsonObject drive = doc.createNestedObject("drive");
     drive["rpm"] = drive_data.rpm;
     drive["current"] = drive_data.current;
+    drive["current_in"] = drive_data.current_in;
     drive["voltage"] = drive_data.voltage;
     drive["temp_fet"] = drive_data.temp_fet;
     drive["temp_motor"] = drive_data.temp_motor;
@@ -367,6 +378,7 @@ void sendDataToPC() {
     JsonObject brake = doc.createNestedObject("brake");
     brake["rpm"] = brake_data.rpm;
     brake["current"] = brake_data.current;
+    brake["current_in"] = brake_data.current_in;
     brake["voltage"] = brake_data.voltage;
     brake["temp_fet"] = brake_data.temp_fet;
     brake["temp_motor"] = brake_data.temp_motor;
@@ -478,7 +490,8 @@ void setBrakeLoad(float current) {
     }
     
     // Convert current to scaled integer (scale factor: 1000)
-    int32_t current_scaled = (int32_t)(current * 1000.0f);
+    // Make current negative for braking (regenerative braking)
+    int32_t current_scaled = (int32_t)(-current * 1000.0f);
     
     struct can_frame frame;
     frame.can_id = BRAKE_VESC_ID | ((uint32_t)CAN_PACKET_SET_CURRENT_BRAKE << 8) | CAN_EFF_FLAG;
@@ -522,30 +535,41 @@ void emergencyStop() {
     dyno_data.drive_enabled = false;
     dyno_data.brake_enabled = false;
     
+    // Reset target values to zero
+    dyno_data.target_load = 0.0;
+    dyno_data.target_rpm = 0.0;
+    
     // Send zero commands immediately
     emergencyZero();
 }
 
 void emergencyZero() {
-    // Send zero current commands only (bypasses safety checks)
+    // Send multiple zero current commands with delays to ensure VESC responds immediately
     struct can_frame frame;
     
-    // Zero current to brake motor
-    frame.can_id = BRAKE_VESC_ID | ((uint32_t)CAN_PACKET_SET_CURRENT_BRAKE << 8) | CAN_EFF_FLAG;
-    frame.can_dlc = 4;
-    frame.data[0] = 0; frame.data[1] = 0; frame.data[2] = 0; frame.data[3] = 0;
-    can_controller->sendMessage(&frame);
-    
-    // Send additional zero current commands for redundancy
-    frame.can_id = DRIVE_VESC_ID | ((uint32_t)CAN_PACKET_SET_CURRENT << 8) | CAN_EFF_FLAG;
-    frame.can_dlc = 4;
-    frame.data[0] = 0; frame.data[1] = 0; frame.data[2] = 0; frame.data[3] = 0;
-    can_controller->sendMessage(&frame);
-    
-    frame.can_id = BRAKE_VESC_ID | ((uint32_t)CAN_PACKET_SET_CURRENT << 8) | CAN_EFF_FLAG;
-    frame.can_dlc = 4;
-    frame.data[0] = 0; frame.data[1] = 0; frame.data[2] = 0; frame.data[3] = 0;
-    can_controller->sendMessage(&frame);
+    // Send multiple rounds of zero commands to override any buffered commands
+    for (int i = 0; i < 3; i++) {
+        // Zero current to brake motor (brake command)
+        frame.can_id = BRAKE_VESC_ID | ((uint32_t)CAN_PACKET_SET_CURRENT_BRAKE << 8) | CAN_EFF_FLAG;
+        frame.can_dlc = 4;
+        frame.data[0] = 0; frame.data[1] = 0; frame.data[2] = 0; frame.data[3] = 0;
+        can_controller->sendMessage(&frame);
+        
+        // Zero current to brake motor (current command)
+        frame.can_id = BRAKE_VESC_ID | ((uint32_t)CAN_PACKET_SET_CURRENT << 8) | CAN_EFF_FLAG;
+        frame.can_dlc = 4;
+        frame.data[0] = 0; frame.data[1] = 0; frame.data[2] = 0; frame.data[3] = 0;
+        can_controller->sendMessage(&frame);
+        
+        // Zero current to drive motor
+        frame.can_id = DRIVE_VESC_ID | ((uint32_t)CAN_PACKET_SET_CURRENT << 8) | CAN_EFF_FLAG;
+        frame.can_dlc = 4;
+        frame.data[0] = 0; frame.data[1] = 0; frame.data[2] = 0; frame.data[3] = 0;
+        can_controller->sendMessage(&frame);
+        
+        // Small delay between command bursts
+        if (i < 2) delay(5);
+    }
 }
 
 void sendHeartbeat() {
@@ -645,5 +669,17 @@ void sendCommandAck(String command, unsigned long receive_time, unsigned long se
     if (timing_active) {
         unsigned long ack_time = getMicroseconds();
         Serial.println("ACK:" + command + ":" + String(receive_time) + ":" + String(send_time) + ":" + String(ack_time));
+    }
+}
+
+void sendContinuousCommands() {
+    // Continuously send drive RPM command to maintain motor operation
+    if (dyno_data.drive_enabled && !dyno_data.emergency_stop) {
+        setDriveRPM(dyno_data.target_rpm);
+    }
+    
+    // Continuously send brake load command to maintain brake operation
+    if (dyno_data.brake_enabled && !dyno_data.emergency_stop) {
+        setBrakeLoad(dyno_data.target_load);
     }
 }

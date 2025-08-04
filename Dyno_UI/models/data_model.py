@@ -30,6 +30,7 @@ class DynamometerData:
         # Drive motor data
         self.drive_rpm = deque(maxlen=max_points)
         self.drive_current = deque(maxlen=max_points)
+        self.drive_current_in = deque(maxlen=max_points)
         self.drive_voltage = deque(maxlen=max_points)
         self.drive_temp_fet = deque(maxlen=max_points)
         self.drive_temp_motor = deque(maxlen=max_points)
@@ -37,6 +38,7 @@ class DynamometerData:
         # Brake motor data
         self.brake_rpm = deque(maxlen=max_points)
         self.brake_current = deque(maxlen=max_points)
+        self.brake_current_in = deque(maxlen=max_points)
         self.brake_voltage = deque(maxlen=max_points)
         self.brake_temp_fet = deque(maxlen=max_points)
         self.brake_temp_motor = deque(maxlen=max_points)
@@ -48,11 +50,11 @@ class DynamometerData:
         # Current values for display
         self.current_values = {
             'drive': {
-                'rpm': 0, 'current': 0.0, 'voltage': 0.0, 'temp_fet': 0.0, 
+                'rpm': 0, 'current': 0.0, 'current_in': 0.0, 'voltage': 0.0, 'temp_fet': 0.0, 
                 'temp_motor': 0.0, 'duty_cycle': 0.0, 'data_age': 0
             },
             'brake': {
-                'rpm': 0, 'current': 0.0, 'voltage': 0.0, 'temp_fet': 0.0,
+                'rpm': 0, 'current': 0.0, 'current_in': 0.0, 'voltage': 0.0, 'temp_fet': 0.0,
                 'temp_motor': 0.0, 'duty_cycle': 0.0, 'data_age': 0
             },
             'dyno': {
@@ -110,12 +112,14 @@ class DynamometerData:
             # Add data points
             self.drive_rpm.append(self.current_values['drive']['rpm'])
             self.drive_current.append(self.current_values['drive']['current'])
+            self.drive_current_in.append(self.current_values['drive']['current_in'])
             self.drive_voltage.append(self.current_values['drive']['voltage'])
             self.drive_temp_fet.append(self.current_values['drive']['temp_fet'])
             self.drive_temp_motor.append(self.current_values['drive']['temp_motor'])
             
             self.brake_rpm.append(self.current_values['brake']['rpm'])
             self.brake_current.append(self.current_values['brake']['current'])
+            self.brake_current_in.append(self.current_values['brake']['current_in'])
             self.brake_voltage.append(self.current_values['brake']['voltage'])
             self.brake_temp_fet.append(self.current_values['brake']['temp_fet'])
             self.brake_temp_motor.append(self.current_values['brake']['temp_motor'])
@@ -173,11 +177,13 @@ class DynamometerData:
         self.timestamps.clear()
         self.drive_rpm.clear()
         self.drive_current.clear()
+        self.drive_current_in.clear()
         self.drive_voltage.clear()
         self.drive_temp_fet.clear()
         self.drive_temp_motor.clear()
         self.brake_rpm.clear()
         self.brake_current.clear()
+        self.brake_current_in.clear()
         self.brake_voltage.clear()
         self.brake_temp_fet.clear()
         self.brake_temp_motor.clear()
@@ -198,10 +204,12 @@ class DynamometerData:
                 'timestamps': list(self.timestamps),
                 'drive_rpm': list(self.drive_rpm),
                 'drive_current': list(self.drive_current),
+                'drive_current_in': list(self.drive_current_in),
                 'drive_temp_fet': list(self.drive_temp_fet),
                 'drive_temp_motor': list(self.drive_temp_motor),
                 'brake_rpm': list(self.brake_rpm),
                 'brake_current': list(self.brake_current),
+                'brake_current_in': list(self.brake_current_in),
                 'brake_temp_fet': list(self.brake_temp_fet),
                 'brake_temp_motor': list(self.brake_temp_motor),
                 'drive_power': list(self.drive_power),

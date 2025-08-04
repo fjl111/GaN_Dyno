@@ -63,6 +63,7 @@ class TwoDimensionalSweepThread(QThread):
         self.command_interface = command_interface
         self.data_model = data_model
         self.step_duration = step_duration
+        self.sample_rate_hz = 5  # Fixed 5Hz sampling rate
         self.running = False
         self.total_steps = rpm_steps * amperage_steps
         self.current_step = 0
@@ -73,7 +74,7 @@ class TwoDimensionalSweepThread(QThread):
         self.current_step = 0
         
         rpm_values = np.linspace(self.start_rpm, self.end_rpm, self.rpm_steps)
-        amperage_values = np.linspace(self.start_amperage, self.end_amperage, self.amperage_steps)
+        amperage_values = np.linspace(self.end_amperage, self.start_amperage, self.amperage_steps)
         
         # Perform nested sweep: for each RPM, sweep through all amperage values
         for rpm_idx, rpm in enumerate(rpm_values):
@@ -99,10 +100,11 @@ class TwoDimensionalSweepThread(QThread):
                 self.command_interface.set_brake_load(amperage)
                 
                 # Wait for stabilization
-                self.msleep(self.step_duration * 1000)
+                stabilization_time = max(1, self.step_duration - 2)  # Reserve 2s for sampling
+                self.msleep(stabilization_time * 1000)
                 
-                # Collect data point
-                data_point = self._collect_data_point(rpm, amperage)
+                # Collect averaged data point
+                data_point = self._collect_averaged_data_point(rpm, amperage)
                 self.data_point_collected.emit(data_point)
                 
         # Reset to safe state
@@ -135,6 +137,97 @@ class TwoDimensionalSweepThread(QThread):
         }
         
         return data_point
+    
+    def _collect_averaged_data_point(self, target_rpm, target_amperage):
+        """Collect multiple samples at 5Hz and return averaged data point."""
+        # Data fields to average
+        numeric_fields = [
+            'actual_rpm', 'actual_amperage', 'drive_power', 'brake_power', 'total_power',
+            'drive_temp_fet', 'drive_temp_motor', 'brake_temp_fet', 'brake_temp_motor',
+            'drive_voltage', 'brake_voltage'
+        ]
+        
+        # Calculate sampling parameters based on fixed 5Hz rate
+        sampling_time = 2  # Use 2 seconds for sampling
+        sample_interval_ms = int(1000 / self.sample_rate_hz)  # 200ms for 5Hz
+        total_samples = int(sampling_time * self.sample_rate_hz)  # 10 samples at 5Hz for 2 seconds
+        
+        # Collect multiple samples
+        samples = []
+        
+        for i in range(total_samples):
+            if not self.running:
+                break
+                
+            # Update status to show sampling progress
+            if i == 0 or i == total_samples - 1:  # Update at start and end only
+                self.status_update.emit(
+                    f"Step {self.current_step}/{self.total_steps}: "
+                    f"{target_rpm:.0f} RPM, {target_amperage:.2f} A - Sampling at 5Hz ({i+1}/{total_samples})"
+                )
+            
+            # Get current values
+            current_values = self.data_model.current_values
+            
+            sample = {
+                'actual_rpm': current_values['drive']['rpm'],
+                'actual_amperage': current_values['brake']['current'],
+                'drive_power': current_values['dyno']['drive_power'],
+                'brake_power': current_values['dyno']['brake_power'],
+                'total_power': current_values['dyno']['drive_power'] + current_values['dyno']['brake_power'],
+                'drive_temp_fet': current_values['drive']['temp_fet'],
+                'drive_temp_motor': current_values['drive']['temp_motor'],
+                'brake_temp_fet': current_values['brake']['temp_fet'],
+                'brake_temp_motor': current_values['brake']['temp_motor'],
+                'drive_voltage': current_values['drive']['voltage'],
+                'brake_voltage': current_values['brake']['voltage']
+            }
+            
+            samples.append(sample)
+            
+            # Wait before next sample (200ms for 5Hz)
+            if i < total_samples - 1:  # Don't wait after last sample
+                self.msleep(sample_interval_ms)
+        
+        # Calculate averages
+        if not samples:
+            # Fallback to single sample if no samples collected
+            return self._collect_data_point(target_rpm, target_amperage)
+        
+        averaged_data = {
+            'target_rpm': target_rpm,
+            'target_amperage': target_amperage,
+            'timestamp': self.current_step
+        }
+        
+        # Calculate mean for each numeric field
+        for field in numeric_fields:
+            values = [sample[field] for sample in samples if field in sample]
+            if values:
+                averaged_data[field] = np.mean(values)
+            else:
+                averaged_data[field] = 0.0
+        
+        # Calculate derived fields from averages
+        averaged_data['max_temp_fet'] = max(averaged_data['drive_temp_fet'], averaged_data['brake_temp_fet'])
+        averaged_data['max_temp_motor'] = max(averaged_data['drive_temp_motor'], averaged_data['brake_temp_motor'])
+        
+        # Add statistical information for quality assessment
+        averaged_data['sample_count'] = len(samples)
+        
+        # Calculate standard deviations for key measurements (optional quality metrics)
+        key_fields = ['actual_rpm', 'actual_amperage', 'total_power', 'max_temp_fet']
+        for field in key_fields:
+            values = [sample.get(field, 0) for sample in samples if field in sample or field == 'max_temp_fet']
+            if field == 'max_temp_fet':
+                values = [max(sample.get('drive_temp_fet', 0), sample.get('brake_temp_fet', 0)) for sample in samples]
+            
+            if len(values) > 1:
+                averaged_data[f'{field}_std'] = np.std(values)
+            else:
+                averaged_data[f'{field}_std'] = 0.0
+        
+        return averaged_data
         
     def stop(self):
         """Stop the test sequence."""
@@ -245,7 +338,7 @@ class TestController:
             
             total_steps = rpm_steps * amperage_steps
             return True, (f"Starting 3D sweep: {start_rpm}-{end_rpm} RPM ({rpm_steps} steps), "
-                         f"{start_amperage}-{end_amperage} A ({amperage_steps} steps), "
+                         f"{end_amperage}-{start_amperage} A ({amperage_steps} steps), "
                          f"{total_steps} total measurements ({step_duration}s each)")
             
         except Exception as e:

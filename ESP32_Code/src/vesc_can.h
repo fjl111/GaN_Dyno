@@ -30,7 +30,7 @@ typedef enum {
     CAN_PACKET_STATUS_2,                  // 14
     CAN_PACKET_STATUS_3,                  // 15
     CAN_PACKET_STATUS_4,                  // 16
-    CAN_PACKET_STATUS_5,                  // 17
+    CAN_PACKET_STATUS_FAKE,                  // 17
     CAN_PACKET_STATUS_6,                  // 18
     CAN_PACKET_PING,
     CAN_PACKET_PONG,
@@ -40,6 +40,7 @@ typedef enum {
     CAN_PACKET_CONF_STORE_CURRENT_LIMITS,
     CAN_PACKET_CONF_CURRENT_LIMITS_IN,
     CAN_PACKET_CONF_STORE_CURRENT_LIMITS_IN,
+    CAN_PACKET_STATUS_5,                  // 27
     CAN_PACKET_CONF_FOC_ERPMS,
     CAN_PACKET_CONF_STORE_FOC_ERPMS,
     CAN_PACKET_GET_VALUES_SELECTIVE,

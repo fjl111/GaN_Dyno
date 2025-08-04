@@ -205,9 +205,10 @@ class TestWidget(QWidget):
                 
                 self.sweep_3d_requested.emit(rpm_range, amp_range, rpm_steps, amp_steps, duration)
                 
-        except ValueError:
-            # Handle invalid input - could emit error signal
-            pass
+        except ValueError as e:
+            # Handle invalid input - update status to show error
+            self.update_test_status(f"Invalid input: {str(e)}")
+            print(f"Test start error: Invalid input - {str(e)}")  # Debug output
             
     def update_test_status(self, status):
         """Update test status label."""
@@ -269,9 +270,40 @@ class TestWidget(QWidget):
         
     def set_enabled(self, enabled):
         """Enable/disable test controls."""
-        self.sweep_start_input.setEnabled(enabled)
-        self.sweep_end_input.setEnabled(enabled)
-        self.sweep_steps_input.setEnabled(enabled)
-        self.step_duration_input.setEnabled(enabled)
-        self.start_sweep_button.setEnabled(enabled)
-        # Note: stop button state depends on test running status
+        # Check if widgets still exist before accessing them
+        try:
+            # Speed sweep inputs
+            if hasattr(self, 'sweep_start_input') and self.sweep_start_input:
+                self.sweep_start_input.setEnabled(enabled)
+            if hasattr(self, 'sweep_end_input') and self.sweep_end_input:
+                self.sweep_end_input.setEnabled(enabled)
+            if hasattr(self, 'sweep_steps_input') and self.sweep_steps_input:
+                self.sweep_steps_input.setEnabled(enabled)
+            if hasattr(self, 'step_duration_input') and self.step_duration_input:
+                self.step_duration_input.setEnabled(enabled)
+                
+            # 3D sweep inputs
+            if hasattr(self, 'rpm_start_input') and self.rpm_start_input:
+                self.rpm_start_input.setEnabled(enabled)
+            if hasattr(self, 'rpm_end_input') and self.rpm_end_input:
+                self.rpm_end_input.setEnabled(enabled)
+            if hasattr(self, 'rpm_steps_input') and self.rpm_steps_input:
+                self.rpm_steps_input.setEnabled(enabled)
+            if hasattr(self, 'amp_start_input') and self.amp_start_input:
+                self.amp_start_input.setEnabled(enabled)
+            if hasattr(self, 'amp_end_input') and self.amp_end_input:
+                self.amp_end_input.setEnabled(enabled)
+            if hasattr(self, 'amp_steps_input') and self.amp_steps_input:
+                self.amp_steps_input.setEnabled(enabled)
+            if hasattr(self, 'step_duration_3d_input') and self.step_duration_3d_input:
+                self.step_duration_3d_input.setEnabled(enabled)
+                
+            # Control buttons
+            if hasattr(self, 'start_sweep_button') and self.start_sweep_button:
+                self.start_sweep_button.setEnabled(enabled)
+            if hasattr(self, 'test_type_combo') and self.test_type_combo:
+                self.test_type_combo.setEnabled(enabled)
+            # Note: stop button state depends on test running status
+        except RuntimeError:
+            # Widget has been deleted, ignore the error
+            pass
