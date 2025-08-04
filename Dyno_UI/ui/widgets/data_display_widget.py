@@ -29,7 +29,7 @@ class DataDisplayWidget(QWidget):
         drive_layout = QGridLayout(drive_group)
         
         row = 0
-        for key in ['rpm', 'current', 'voltage', 'temp_fet', 'temp_motor', 'duty_cycle', 'data_age']:
+        for key in ['rpm', 'current', 'current_in', 'voltage', 'temp_fet', 'temp_motor', 'duty_cycle', 'data_age']:
             label_text = key.replace('_', ' ').title() + ":"
             drive_layout.addWidget(QLabel(label_text), row, 0)
             
@@ -46,7 +46,7 @@ class DataDisplayWidget(QWidget):
         brake_layout = QGridLayout(brake_group)
         
         row = 0
-        for key in ['rpm', 'current', 'voltage', 'temp_fet', 'temp_motor', 'duty_cycle', 'data_age']:
+        for key in ['rpm', 'current', 'current_in', 'voltage', 'temp_fet', 'temp_motor', 'duty_cycle', 'data_age']:
             label_text = key.replace('_', ' ').title() + ":"
             brake_layout.addWidget(QLabel(label_text), row, 0)
             
@@ -126,7 +126,7 @@ class DataDisplayWidget(QWidget):
         
     def _format_value(self, key, value):
         """Format value based on key type."""
-        if key in ['current', 'voltage', 'temp_fet', 'temp_motor', 'duty_cycle']:
+        if key in ['current', 'current_in', 'voltage', 'temp_fet', 'temp_motor', 'duty_cycle']:
             return f"{value:.2f}"
         elif key in ['target_load', 'mechanical_power']:
             return f"{value:.3f}"

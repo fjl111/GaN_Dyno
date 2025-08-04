@@ -341,16 +341,13 @@ void parseVESCMessage(uint8_t vesc_id, uint8_t command, uint8_t* data, uint8_t l
 
 void calculateDynoMetrics() {
     // Calculate drive power
-    if (drive_data.connected) {
-        // Power = Voltage × Current (electrical power approximation)
-        dyno_data.drive_power = drive_data.voltage_in * drive_data.current_in;
-    }
     
-    // Calculate brake power
-    if (brake_data.connected) {
-        // Power = Voltage × Current (electrical power approximation)
-        dyno_data.brake_power = brake_data.voltage_in * brake_data.current_in;
-    }
+    // Power = Voltage × Current (electrical power approximation)
+    dyno_data.drive_power = drive_data.voltage_in * drive_data.current_in;
+    
+
+    // Power = Voltage × Current (electrical power approximation)
+    dyno_data.brake_power = brake_data.voltage_in * brake_data.current_in;
     
     // Update data age
     drive_data.data_age += 1;
@@ -368,7 +365,7 @@ void sendDataToPC() {
     drive["rpm"] = drive_data.rpm;
     drive["current"] = drive_data.current;
     drive["current_in"] = drive_data.current_in;
-    drive["voltage"] = drive_data.voltage;
+    drive["voltage"] = drive_data.voltage_in;
     drive["temp_fet"] = drive_data.temp_fet;
     drive["temp_motor"] = drive_data.temp_motor;
     drive["duty_cycle"] = drive_data.duty_cycle;
@@ -379,7 +376,7 @@ void sendDataToPC() {
     brake["rpm"] = brake_data.rpm;
     brake["current"] = brake_data.current;
     brake["current_in"] = brake_data.current_in;
-    brake["voltage"] = brake_data.voltage;
+    brake["voltage"] = brake_data.voltage_in;
     brake["temp_fet"] = brake_data.temp_fet;
     brake["temp_motor"] = brake_data.temp_motor;
     brake["duty_cycle"] = brake_data.duty_cycle;

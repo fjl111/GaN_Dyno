@@ -222,8 +222,12 @@ class DynamometerPlotter:
         # Update line data efficiently
         self.rpm_drive_line.set_data(times, filtered_data['drive_rpm'])
         self.rpm_brake_line.set_data(times, filtered_data['brake_rpm'])
-        self.drive_power_line.set_data(times, filtered_data['drive_power'])
-        self.brake_power_line.set_data(times, filtered_data['brake_power'])
+        
+        # Take absolute value of power for display (invert negative values)
+        drive_power_display = np.abs(filtered_data['drive_power'])
+        brake_power_display = np.abs(filtered_data['brake_power'])
+        self.drive_power_line.set_data(times, drive_power_display)
+        self.brake_power_line.set_data(times, brake_power_display)
         self.temp_drive_fet_line.set_data(times, filtered_data['drive_temp_fet'])
         self.temp_drive_motor_line.set_data(times, filtered_data['drive_temp_motor'])
         self.temp_brake_fet_line.set_data(times, filtered_data['brake_temp_fet'])
@@ -273,13 +277,13 @@ class DynamometerPlotter:
                 self.ax_rpm.set_ylim(rpm_min - rpm_range * padding_factor, 
                                    rpm_max + rpm_range * padding_factor)
                                
-        # Power plot
+        # Power plot - use absolute values for scaling since we display abs values
         if len(data['drive_power']) > 0 or len(data['brake_power']) > 0:
             all_power_values = []
             if len(data['drive_power']) > 0:
-                all_power_values.extend(data['drive_power'])
+                all_power_values.extend(np.abs(data['drive_power']))
             if len(data['brake_power']) > 0:
-                all_power_values.extend(data['brake_power'])
+                all_power_values.extend(np.abs(data['brake_power']))
             
             if all_power_values:
                 power_min, power_max = np.min(all_power_values), np.max(all_power_values)
